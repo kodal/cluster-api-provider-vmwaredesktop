@@ -60,5 +60,5 @@ type VDClusterList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&VDCluster{}, &VDClusterList{})
+	objectTypes = append(objectTypes, &VDCluster{}, &VDClusterList{})
 }

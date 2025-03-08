@@ -60,5 +60,5 @@ type VDMachineList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&VDMachine{}, &VDMachineList{})
+	objectTypes = append(objectTypes, &VDMachine{}, &VDMachineList{})
 }
