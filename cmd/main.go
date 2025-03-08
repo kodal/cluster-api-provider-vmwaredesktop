@@ -36,6 +36,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	infrastructurev1alpha1 "github.com/kodal/cluster-api-provider-vmware-desktop/api/v1alpha1"
+	"github.com/kodal/cluster-api-provider-vmware-desktop/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -47,6 +50,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
+	utilruntime.Must(infrastructurev1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -198,6 +202,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = (&controller.VDClusterReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "VDCluster")
+		os.Exit(1)
+	}
+	if err = (&controller.VDMachineReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "VDMachine")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {
