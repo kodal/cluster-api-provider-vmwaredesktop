@@ -25,3 +25,8 @@ go.work
 *.swp
 *.swo
 *~
+
+# Tilt files
+.envrc
+.tiltbuild
+tilt-provider.yaml
