@@ -9,6 +9,11 @@ spec:
   clusterNetwork:
     pods:
       cidrBlocks: ["192.168.0.0/16"]
+  paused: false
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    kind: TalosControlPlane
+    name: talos-cp
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
     kind: VDCluster

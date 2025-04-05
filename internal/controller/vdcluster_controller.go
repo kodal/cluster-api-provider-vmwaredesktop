@@ -29,12 +29,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"sigs.k8s.io/cluster-api/util"
-	clusterutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 
-	infrav1alpha1 "github.com/kodal/cluster-api-provider-vmware-desktop/api/v1alpha1"
+	infrav1 "github.com/kodal/cluster-api-provider-vmware-desktop/api/v1alpha1"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
@@ -62,7 +61,7 @@ type VDClusterReconciler struct {
 func (r *VDClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, rerr error) {
 	logger := log.FromContext(ctx)
 
-	vdCluster := &infrav1alpha1.VDCluster{}
+	vdCluster := &infrav1.VDCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, vdCluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -71,7 +70,7 @@ func (r *VDClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Get owner cluster
-	cluster, err := clusterutil.GetOwnerCluster(ctx, r.Client, vdCluster.ObjectMeta)
+	cluster, err := util.GetOwnerCluster(ctx, r.Client, vdCluster.ObjectMeta)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -91,7 +90,7 @@ func (r *VDClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	// Always attempt to Patch the DockerCluster object and status after each reconciliation.
+	// Always attempt to Patch the VDCluster object and status after each reconciliation.
 	defer func() {
 		if err := helper.Patch(ctx, vdCluster); err != nil {
 			logger.Error(err, "Failed to patch VDCluster")
@@ -114,22 +113,22 @@ func (r *VDClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 // SetupWithManager sets up the controller with the Manager.
 func (r *VDClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrav1alpha1.VDCluster{}).
+		For(&infrav1.VDCluster{}).
 		Watches(
 			&clusterv1.Cluster{},
-			handler.EnqueueRequestsFromMapFunc(util.ClusterToInfrastructureMapFunc(ctx, infrav1alpha1.GroupVersion.WithKind("VDCluster"), mgr.GetClient(), &infrav1alpha1.VDCluster{})),
+			handler.EnqueueRequestsFromMapFunc(util.ClusterToInfrastructureMapFunc(ctx, infrav1.GroupVersion.WithKind("VDCluster"), mgr.GetClient(), &infrav1.VDCluster{})),
 			builder.WithPredicates(predicates.ClusterUnpaused(mgr.GetScheme(), ctrl.LoggerFrom(ctx))),
 		).
 		Named("vdcluster").
 		Complete(r)
 }
 
-func (r *VDClusterReconciler) reconcileDelete(ctx context.Context, vdCluster *infrav1alpha1.VDCluster) (ctrl.Result, error) {
+func (r *VDClusterReconciler) reconcileDelete(ctx context.Context, vdCluster *infrav1.VDCluster) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling VDCluster deletion")
 
 	// Cluster is deleted so remove the finalizer.
-	controllerutil.RemoveFinalizer(vdCluster, infrav1alpha1.ClusterFinalizer)
+	controllerutil.RemoveFinalizer(vdCluster, infrav1.ClusterFinalizer)
 
 	return ctrl.Result{}, nil
 }

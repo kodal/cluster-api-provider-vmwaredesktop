@@ -22,6 +22,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the {{ .ProjectName }} itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- vdmachinetemplate_admin_role.yaml
+- vdmachinetemplate_editor_role.yaml
+- vdmachinetemplate_viewer_role.yaml
 - vdmachine_admin_role.yaml
 - vdmachine_editor_role.yaml
 - vdmachine_viewer_role.yaml

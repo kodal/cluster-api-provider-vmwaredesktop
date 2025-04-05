@@ -1,11 +1,11 @@
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-kind: VDCluster
+kind: VDMachineTemplate
 metadata:
   labels:
     app.kubernetes.io/name: cluster-api-provider-vmware-desktop
     app.kubernetes.io/managed-by: kustomize
-  name: vdcluster-sample
+  name: vdmachinetemplate-sample
 spec:
-  controlPlaneEndpoint:
-    host: 172.16.62.140
-    port: 6443
+  template:
+    spec:
+      templateID: 8ISDV7ATO4E2LML0EUD2HCVT93A28QU5

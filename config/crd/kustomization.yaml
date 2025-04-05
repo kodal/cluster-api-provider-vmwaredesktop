@@ -10,6 +10,7 @@ labels:
 resources:
 - bases/infrastructure.cluster.x-k8s.io_vdclusters.yaml
 - bases/infrastructure.cluster.x-k8s.io_vdmachines.yaml
+- bases/infrastructure.cluster.x-k8s.io_vdmachinetemplates.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 # patches:

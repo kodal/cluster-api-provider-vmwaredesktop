@@ -18,24 +18,63 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+const (
+	// MachineFinalizer allows cleaning up resources associated with
+	// DockerMachine before removing it from the API Server.
+	MachineFinalizer = "vdmachine.infrastructure.cluster.x-k8s.io"
+)
 
 // VDMachineSpec defines the desired state of VDMachine.
 type VDMachineSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of VDMachine. Edit vdmachine_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// +optional
+	ProviderID *string `json:"providerID,omitempty"`
+
+	// ID of the template VM to clone.
+	TemplateID string `json:"templateID"`
+}
+
+// InitializationStatus represents the initialization state of the resource.
+type InitializationStatus struct {
+	// Provisioned is set to true when the resource has been provisioned.
+	// +optional
+	Provisioned bool `json:"provisioned,omitempty"`
+
+	// +optional
+	BootstrapDataProvided bool `json:"bootstrapDataProvided,omitempty"`
 }
 
 // VDMachineStatus defines the observed state of VDMachine.
 type VDMachineStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// +optional
+	Ready bool `json:"ready"`
+
+	// Addresses contains the associated addresses for the vmware virtual machine.
+	// +optional
+	Addresses []clusterv1.MachineAddress `json:"addresses,omitempty"`
+
+	// Conditions defines current service state of the VDMachine.
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Initialization represents the initialization state of the VDMachine.
+	// +optional
+	Initialization InitializationStatus `json:"initialization,omitempty"`
+
+	// VM power state.
+	// +optional
+	State *string `json:"state,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -48,6 +87,16 @@ type VDMachine struct {
 
 	Spec   VDMachineSpec   `json:"spec,omitempty"`
 	Status VDMachineStatus `json:"status,omitempty"`
+}
+
+// GetV1Beta2Conditions implements v1beta2.Setter.
+func (m *VDMachine) GetV1Beta2Conditions() []metav1.Condition {
+	return m.Status.Conditions
+}
+
+// SetV1Beta2Conditions implements v1beta2.Setter.
+func (m *VDMachine) SetV1Beta2Conditions(conditions []metav1.Condition) {
+	m.Status.Conditions = conditions
 }
 
 // +kubebuilder:object:root=true
