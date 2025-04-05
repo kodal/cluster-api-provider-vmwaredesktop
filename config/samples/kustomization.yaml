@@ -1,9 +1,0 @@
-namespace: default
-## Append samples of your project ##
-resources:
-- cluster_v1beta1_cluster.yaml
-- infrastructure_v1alpha1_vdcluster.yaml
-- infrastructure_v1alpha1_vdmachine.yaml
-- infrastructure_v1alpha1_vdmachinetemplate.yaml
-- talos-cp.yaml
-# +kubebuilder:scaffold:manifestskustomizesamples
