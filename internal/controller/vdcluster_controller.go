@@ -123,7 +123,7 @@ func (r *VDClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Man
 		Complete(r)
 }
 
-func (r *VDClusterReconciler) reconcileDelete(ctx context.Context, vdCluster *infrav1.VDCluster) (ctrl.Result, error) {
+func (r *VDClusterReconciler) reconcileDelete(ctx context.Context, vdCluster *infrav1.VDCluster) (ctrl.Result, error) { // nolint:unparam
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling VDCluster deletion")
 

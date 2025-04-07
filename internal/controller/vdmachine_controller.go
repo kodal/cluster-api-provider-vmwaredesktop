@@ -287,7 +287,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 	return ctrl.Result{}, nil
 }
 
-func (r *VDMachineReconciler) reconcileDelete(ctx context.Context, vdMachine *infrav1.VDMachine) (_ ctrl.Result, rerr error) {
+func (r *VDMachineReconciler) reconcileDelete(ctx context.Context, vdMachine *infrav1.VDMachine) (_ ctrl.Result, rerr error) { // nolint:unparam
 	logger := log.FromContext(ctx)
 
 	vmId := r.GetID(vdMachine)
