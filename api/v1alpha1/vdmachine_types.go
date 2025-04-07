@@ -40,6 +40,10 @@ type VDMachineSpec struct {
 
 	// ID of the template VM to clone.
 	TemplateID string `json:"templateID"`
+
+	// Cloud Init network_config
+	// +optional
+	NetworkConfig *string `json:"networkConfig,omitempty"`
 }
 
 // InitializationStatus represents the initialization state of the resource.

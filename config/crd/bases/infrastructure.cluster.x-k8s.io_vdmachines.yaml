@@ -39,6 +39,9 @@ spec:
           spec:
             description: VDMachineSpec defines the desired state of VDMachine.
             properties:
+              networkConfig:
+                description: Cloud Init network_config
+                type: string
               providerID:
                 type: string
               templateID:

@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -183,9 +184,15 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 
 		logger.Info("Bootstrap data", "data", bootstrapData)
 
+		bootstrapData = strings.ReplaceAll(bootstrapData, "{ provider_id }", *vdMachine.Spec.ProviderID)
+
 		// Set guestinfo parameters using a map
 		encodedBootstrapData := base64.StdEncoding.EncodeToString([]byte(bootstrapData))
-		metadata := fmt.Sprintf("instance-id: %s\nlocal-hostname: %s", *r.GetID(vdMachine), vdMachine.Name)
+		networkConfig := ""
+		if vdMachine.Spec.NetworkConfig != nil {
+			networkConfig = *vdMachine.Spec.NetworkConfig
+		}
+		metadata := fmt.Sprintf("instance-id: %s\nlocal-hostname: %s\n%s", *r.GetID(vdMachine), vdMachine.Name, networkConfig)
 		encodedMetadata := base64.StdEncoding.EncodeToString([]byte(metadata))
 
 		params := map[string]string{

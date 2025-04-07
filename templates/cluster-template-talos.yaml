@@ -1,0 +1,74 @@
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: ${CLUSTER_NAME}
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks: ["10.244.0.0/16"]
+  controlPlaneRef:
+    kind: TalosControlPlane
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    name: ${CLUSTER_NAME}-control-plane
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+    kind: VDCluster
+    name: ${CLUSTER_NAME}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: VDCluster
+metadata:
+    name: ${CLUSTER_NAME}
+spec:
+  controlPlaneEndpoint:
+    host: ${CONTROL_PLANE_ENDPOINT_IP}
+    port: 6443
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: VDMachineTemplate
+metadata:
+  name: "${CLUSTER_NAME}-control-plane"
+spec:
+  template:
+    spec:
+      templateID: ${TEMPLATE_VM_ID}
+      networkConfig: |
+        network:
+          version: 2
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+kind: TalosControlPlane
+metadata:
+  name: ${CLUSTER_NAME}-control-plane
+spec:
+  version: ${KUBERNETES_VERSION}
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT=1}
+  infrastructureTemplate:
+    kind: VDMachineTemplate
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+    name: ${CLUSTER_NAME}-control-plane
+    namespace: ${NAMESPACE}
+  controlPlaneConfig:
+    controlplane:
+      generateType: controlplane
+      strategicPatches:
+         - |
+           machine:
+             install:
+               image: factory.talos.dev/installer/e73124861dff640345aee009e7f5e6bc20bf540eadc3166d21de1758e695844e:v1.9.5
+               disk: /dev/sda
+               extraKernelArgs:
+                 - net.ifnames=0
+               extensions:
+                 - image: ghcr.io/siderolabs/talos-vmtoolsd:v1.0.0
+             network: 
+               interfaces:
+                 - interface: eth0
+                   dhcp: true
+                   vip:
+                     ip: ${CONTROL_PLANE_ENDPOINT_IP}
+             kubelet:
+               extraArgs:
+                 provider-id: "{ provider_id }"
+---
