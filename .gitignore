@@ -29,4 +29,3 @@ go.work
 # Tilt files
 .envrc
 .tiltbuild
-tilt-provider.yaml

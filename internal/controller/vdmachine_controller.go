@@ -40,7 +40,7 @@ import (
 
 	"github.com/kodal/vmrest-go-client"
 
-	infrav1 "github.com/kodal/cluster-api-provider-vmware-desktop/api/v1alpha1"
+	infrav1 "github.com/kodal/cluster-api-provider-vmwaredesktop/api/v1alpha1"
 )
 
 // VDMachineReconciler reconciles a VDMachine object
@@ -366,7 +366,7 @@ func (r *VDMachineReconciler) GetID(m *infrav1.VDMachine) *string {
 		return nil
 	}
 	providerID := *m.Spec.ProviderID
-	id := providerID[len("vmware-desktop://"):]
+	id := providerID[len("vmwaredesktop://"):]
 	return &id
 }
 
@@ -375,6 +375,6 @@ func (r *VDMachineReconciler) SetID(m *infrav1.VDMachine, id *string) {
 		m.Spec.ProviderID = nil
 		return
 	}
-	providerID := "vmware-desktop://" + *id
+	providerID := "vmwaredesktop://" + *id
 	m.Spec.ProviderID = &providerID
 }

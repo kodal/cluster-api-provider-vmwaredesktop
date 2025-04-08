@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	infrastructurev1alpha1 "github.com/kodal/cluster-api-provider-vmware-desktop/api/v1alpha1"
+	infrastructurev1alpha1 "github.com/kodal/cluster-api-provider-vmwaredesktop/api/v1alpha1"
 )
 
 var _ = Describe("VDMachine Controller", func() {

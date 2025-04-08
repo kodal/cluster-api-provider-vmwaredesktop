@@ -1,0 +1,7 @@
+{
+    "name": "infrastructure-vmwaredesktop",
+    "config": {
+      "componentsFile": "infrastructure-components.yaml",
+      "nextVersion": "v0.1.0"
+    }
+  }

@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 
-	infrav1 "github.com/kodal/cluster-api-provider-vmware-desktop/api/v1alpha1"
+	infrav1 "github.com/kodal/cluster-api-provider-vmwaredesktop/api/v1alpha1"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )

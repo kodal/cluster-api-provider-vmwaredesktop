@@ -39,8 +39,8 @@ import (
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	infrav1 "github.com/kodal/cluster-api-provider-vmware-desktop/api/v1alpha1"
-	"github.com/kodal/cluster-api-provider-vmware-desktop/internal/controller"
+	infrav1 "github.com/kodal/cluster-api-provider-vmwaredesktop/api/v1alpha1"
+	"github.com/kodal/cluster-api-provider-vmwaredesktop/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 

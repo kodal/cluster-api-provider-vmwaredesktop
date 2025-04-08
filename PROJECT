@@ -5,8 +5,8 @@
 domain: cluster.x-k8s.io
 layout:
 - go.kubebuilder.io/v4
-projectName: cluster-api-provider-vmware-desktop
-repo: github.com/kodal/cluster-api-provider-vmware-desktop
+projectName: cluster-api-provider-vmwaredesktop
+repo: github.com/kodal/cluster-api-provider-vmwaredesktop
 resources:
 - api:
     crdVersion: v1
@@ -15,7 +15,7 @@ resources:
   domain: cluster.x-k8s.io
   group: infrastructure
   kind: VDCluster
-  path: github.com/kodal/cluster-api-provider-vmware-desktop/api/v1alpha1
+  path: github.com/kodal/cluster-api-provider-vmwaredesktop/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -24,7 +24,7 @@ resources:
   domain: cluster.x-k8s.io
   group: infrastructure
   kind: VDMachine
-  path: github.com/kodal/cluster-api-provider-vmware-desktop/api/v1alpha1
+  path: github.com/kodal/cluster-api-provider-vmwaredesktop/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -32,6 +32,6 @@ resources:
   domain: cluster.x-k8s.io
   group: infrastructure
   kind: VDMachineTemplate
-  path: github.com/kodal/cluster-api-provider-vmware-desktop/api/v1alpha1
+  path: github.com/kodal/cluster-api-provider-vmwaredesktop/api/v1alpha1
   version: v1alpha1
 version: "3"

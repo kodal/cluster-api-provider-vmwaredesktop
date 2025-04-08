@@ -57,6 +57,10 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
+.PHONY: tidy
+tidy: ## Run go mod tidy to ensure modules are up to date
+	go mod tidy
+
 .PHONY: test
 test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
@@ -65,17 +69,17 @@ test: manifests generate fmt vet setup-envtest ## Run tests.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
-.PHONY: test-e2e
-test-e2e: manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	@command -v kind >/dev/null 2>&1 || { \
-		echo "Kind is not installed. Please install Kind manually."; \
-		exit 1; \
-	}
-	@kind get clusters | grep -q 'kind' || { \
-		echo "No Kind cluster is running. Please start a Kind cluster before running the e2e tests."; \
-		exit 1; \
-	}
-	go test ./test/e2e/ -v -ginkgo.v
+# .PHONY: test-e2e
+# test-e2e: manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
+# 	@command -v kind >/dev/null 2>&1 || { \
+# 		echo "Kind is not installed. Please install Kind manually."; \
+# 		exit 1; \
+# 	}
+# 	@kind get clusters | grep -q 'kind' || { \
+# 		echo "No Kind cluster is running. Please start a Kind cluster before running the e2e tests."; \
+# 		exit 1; \
+# 	}
+# 	go test ./test/e2e/ -v -ginkgo.v
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -121,10 +125,10 @@ PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	- $(CONTAINER_TOOL) buildx create --name cluster-api-provider-vmware-desktop-builder
-	$(CONTAINER_TOOL) buildx use cluster-api-provider-vmware-desktop-builder
+	- $(CONTAINER_TOOL) buildx create --name cluster-api-provider-vmwaredesktop-builder
+	$(CONTAINER_TOOL) buildx use cluster-api-provider-vmwaredesktop-builder
 	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
-	- $(CONTAINER_TOOL) buildx rm cluster-api-provider-vmware-desktop-builder
+	- $(CONTAINER_TOOL) buildx rm cluster-api-provider-vmwaredesktop-builder
 	rm Dockerfile.cross
 
 .PHONY: build-installer
@@ -132,6 +136,29 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	mkdir -p dist
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default > dist/install.yaml
+
+##@ verify
+
+.PHONY: verify
+verify: verify-modules verify-gen ## verify the manifests and the code.
+
+.PHONY: verify-modules
+verify-modules: tidy ## Verify go modules are up to date
+	@if !(git diff --quiet HEAD -- go.sum go.mod); then \
+		git diff; \
+		echo "go module files are out of date"; exit 1; \
+	fi
+	@if (find . -name 'go.mod' | xargs -n1 grep -q -i 'k8s.io/client-go.*+incompatible'); then \
+		find . -name "go.mod" -exec grep -i 'k8s.io/client-go.*+incompatible' {} \; -print; \
+		echo "go module contains an incompatible client-go version"; exit 1; \
+	fi
+
+.PHONY: verify-gen
+verify-gen: generate manifests mockgen ## Verify go generated files and CRDs are up to date
+	@if !(git diff --quiet HEAD); then \
+		git diff; \
+		echo "generated files are out of date, run make generate and/or make mockgen"; exit 1; \
+	fi
 
 ##@ Deployment
 
@@ -222,3 +249,102 @@ mv $(1) $(1)-$(3) ;\
 } ;\
 ln -sf $(1)-$(3) $(1)
 endef
+
+##@ Tilt
+
+.PHONY: tilt-up
+tilt-up: ## Start Tilt in a kind cluster.
+	cd ../cluster-api && $(MAKE) tilt-up
+
+.PHONY: clean-tilt
+clean-tilt: ## Clean up Tilt in a kind cluster.
+	cd ../cluster-api && $(MAKE) clean-tilt
+
+##@ e2e
+## --------------------------------------
+## E2e tests
+## --------------------------------------
+ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+E2E_CONF_FILE ?= $(ROOT_DIR)/test/e2e/config/vmwaredesktop-ci.yaml
+E2E_CONF_FILE_ENVSUBST := $(ROOT_DIR)/test/e2e/config/vmwaredesktop-ci-envsubst.yaml
+E2E_DATA_DIR ?= $(ROOT_DIR)/test/e2e/data
+KUBETEST_CONF_PATH ?= $(abspath $(E2E_DATA_DIR)/kubetest/conformance.yaml)
+
+
+# Allow overriding the e2e configurations
+GINKGO_FOCUS ?= Workload cluster creation
+GINKGO_SKIP ?= Flatcar
+GINKGO_NODES ?= 1
+GINKGO_NOCOLOR ?= false
+GINKGO_ARGS ?=
+GINKGO_TIMEOUT ?= 2h
+GINKGO_POLL_PROGRESS_AFTER ?= 10m
+GINKGO_POLL_PROGRESS_INTERVAL ?= 1m
+ARTIFACTS ?= $(ROOT_DIR)/_artifacts
+SKIP_CLEANUP ?= false
+SKIP_CREATE_MGMT_CLUSTER ?= false
+
+# Install tools
+
+GINKGO_BIN := ginkgo
+GINKGO := $(LOCALBIN)/$(GINKGO_BIN)
+
+ENVSUBST_VER := v1.4.2
+ENVSUBST_BIN := envsubst
+ENVSUBST := $(LOCALBIN)/$(ENVSUBST_BIN)
+
+$(ENVSUBST): ## Build envsubst.
+	test -s $(LOCALBIN)/$(ENVSUBST_BIN) || \
+	GOBIN=$(LOCALBIN) go install github.com/a8m/envsubst/cmd/envsubst@$(ENVSUBST_VER)
+
+$(GINKGO): ## Build ginkgo.
+	GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/v2/ginkgo
+
+$(KUBECTL): ## Ensure kubectl is available
+	@which kubectl > /dev/null
+
+.PHONY: e2e-image
+e2e-image:
+	docker build --tag="$(REPOSITORY):e2e" .
+
+.PHONY: test-e2e
+test-e2e: $(ENVSUBST) $(KUBECTL) $(GINKGO) kustomize e2e-image ## Run the end-to-end tests
+	$(ENVSUBST) < $(E2E_CONF_FILE) > $(E2E_CONF_FILE_ENVSUBST) && \
+	time $(GINKGO) -v --trace -poll-progress-after=$(GINKGO_POLL_PROGRESS_AFTER) -poll-progress-interval=$(GINKGO_POLL_PROGRESS_INTERVAL) \
+	--tags=e2e --focus="$(GINKGO_FOCUS)" -skip="$(GINKGO_SKIP)" --nodes=$(GINKGO_NODES) --no-color=$(GINKGO_NOCOLOR) \
+	--timeout=$(GINKGO_TIMEOUT) --output-dir="$(ARTIFACTS)" --junit-report="junit.e2e_suite.1.xml" --fail-fast  $(GINKGO_ARGS) ./test/e2e -- \
+		-e2e.artifacts-folder="$(ARTIFACTS)" \
+		-e2e.config="$(E2E_CONF_FILE_ENVSUBST)" \
+		-e2e.skip-resource-cleanup=$(SKIP_CLEANUP) \
+		-e2e.use-existing-cluster=$(SKIP_CREATE_MGMT_CLUSTER) $(E2E_ARGS)
+
+CONFORMANCE_E2E_ARGS ?= -kubetest.config-file=$(KUBETEST_CONF_PATH)
+CONFORMANCE_E2E_ARGS += $(E2E_ARGS)
+.PHONY: test-conformance
+test-conformance: ## Run conformance test on workload cluster.
+	$(MAKE) test-e2e GINKGO_FOCUS="Conformance Tests" E2E_ARGS='$(CONFORMANCE_E2E_ARGS)' GINKGO_ARGS='$(LOCAL_GINKGO_ARGS)'
+
+
+##@ Release
+## --------------------------------------
+## Release
+## --------------------------------------
+
+REPOSITORY ?= ghcr.io/kodal/cluster-api-provider-vmwaredesktop
+RELEASE_DIR ?= out
+RELEASE_VERSION ?= v0.1.1
+
+.PHONY: release-manifests
+RELEASE_MANIFEST_SOURCE_BASE ?= config/default
+release-manifests: $(KUSTOMIZE) ## Create kustomized release manifest in $RELEASE_DIR (defaults to out).
+	@mkdir -p $(RELEASE_DIR)
+	cp metadata.yaml $(RELEASE_DIR)/metadata.yaml
+	## change the image tag to the release version
+	cd $(RELEASE_MANIFEST_SOURCE_BASE) && $(KUSTOMIZE) edit set image $(REPOSITORY):$(RELEASE_VERSION)
+	## generate the release manifest
+	$(KUSTOMIZE) build $(RELEASE_MANIFEST_SOURCE_BASE) > $(RELEASE_DIR)/infrastructure-components.yaml
+
+.PHONY: release-templates
+release-templates: ## Generate release templates
+	@mkdir -p $(RELEASE_DIR)
+	cp templates/cluster-template*.yaml $(RELEASE_DIR)/

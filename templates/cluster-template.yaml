@@ -52,12 +52,12 @@ spec:
       nodeRegistration:
         name: "{{ ds.meta_data.local_hostname }}"
         kubeletExtraArgs:
-          provider-id: "vmware-desktop://'{{ ds.meta_data.instance_id }}'"
+          provider-id: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
     joinConfiguration:
       nodeRegistration:
         name: "{{ ds.meta_data.local_hostname }}"
         kubeletExtraArgs:
-          provider-id: "vmware-desktop://'{{ ds.meta_data.instance_id }}'"
+          provider-id: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
     users:
       - name: root
         sshAuthorizedKeys: [${VM_SSH_KEYS}]
@@ -216,4 +216,4 @@ spec:
       joinConfiguration:
         nodeRegistration:
           kubeletExtraArgs:
-            provider-id: "vmware-desktop://'{{ ds.meta_data.instance_id }}'"
+            provider-id: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
