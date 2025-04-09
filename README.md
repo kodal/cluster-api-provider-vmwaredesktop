@@ -11,6 +11,15 @@ The Cluster API Provider Vmware Desktop (CAVD) provides a way to declaratively c
 - Prepared Virtual Machine by [image-builder](https://image-builder.sigs.k8s.io/capi/providers/vsphere) with `build-node-ova-local-` or [factory-talos](https://factory.talos.dev/) `Cloud/Vmware` (only amd64 supports by Talos)
 - Running `vmrest` [Doc](https://techdocs.broadcom.com/us/en/vmware-cis/desktop-hypervisors/fusion-pro/13-0/using-vmware-fusion/guide-and-help-using-the-vmware-fusion-rest-api/guide-and-help-use-the-fusion-api-service.html)
 
+### Required env variables
+```
+# Example
+VMREST_URL="http://host.docker.internal:8697/api" # http://localhost:8697/api vmrest url
+VMREST_USERNAME="user"
+VMREST_PASSWORD="password"
+TEMPLATE_VM_ID="LIVK1CGKIC5J71SNTC711F7O9TR3BDDQ" # VM ID from vmrest/api/vms prepared with defined kubernetes version
+```
+
 ## License
 
 Copyright 2025.
