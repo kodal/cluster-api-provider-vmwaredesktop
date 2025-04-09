@@ -9,7 +9,7 @@ The Cluster API Provider Vmware Desktop (CAVD) provides a way to declaratively c
 - Understanding Cluster API [Quick Start](https://cluster-api.sigs.k8s.io/user/quick-start)
 - Vmware Desktop Hypervisor (Workstation or Fusion, tested only with Fusion)
 - Prepared Virtual Machine by [image-builder](https://image-builder.sigs.k8s.io/capi/providers/vsphere) with `build-node-ova-local-` or [factory-talos](https://factory.talos.dev/) `Cloud/Vmware` (only amd64 supports by Talos)
-- Running `vmrest` [Doc] (https://techdocs.broadcom.com/us/en/vmware-cis/desktop-hypervisors/fusion-pro/13-0/using-vmware-fusion/guide-and-help-using-the-vmware-fusion-rest-api/guide-and-help-use-the-fusion-api-service.html)
+- Running `vmrest` [Doc](https://techdocs.broadcom.com/us/en/vmware-cis/desktop-hypervisors/fusion-pro/13-0/using-vmware-fusion/guide-and-help-using-the-vmware-fusion-rest-api/guide-and-help-use-the-fusion-api-service.html)
 
 ## License
 
