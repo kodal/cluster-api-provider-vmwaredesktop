@@ -1,122 +1,28 @@
-# cluster-api-provider-vmwaredesktop
-// TODO(user): Add simple overview of use/purpose
-Test
+# Cluster API Provider Vmware Desktop (Workstation, Fusion)
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+The Cluster API Provider Vmware Desktop (CAVD) provides a way to declaratively create and manage cluster on Vmware Desktop with `vmrest`, in a Kubernetes-native way. It extends the Kubernetes API with Custom Resource Definitions (CRDs) allowing you to interact with clusters in the same fashion you interact with workload.
 
 ## Getting Started
 
 ### Prerequisites
-- go version v1.23.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+- Understanding Cluster API [Quick Start](https://cluster-api.sigs.k8s.io/user/quick-start)
+- Vmware Desktop Hypervisor (Workstation or Fusion, tested only with Fusion)
+- Prepared Virtual Machine by [image-builder](https://image-builder.sigs.k8s.io/capi/providers/vsphere) with `build-node-ova-local-` or [factory-talos](https://factory.talos.dev/) `Cloud/Vmware` (only amd64 supports by Talos)
+- Running `vmrest` [Doc](https://techdocs.broadcom.com/us/en/vmware-cis/desktop-hypervisors/fusion-pro/13-0/using-vmware-fusion/guide-and-help-using-the-vmware-fusion-rest-api/guide-and-help-use-the-fusion-api-service.html)
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
-
-```sh
-make docker-build docker-push IMG=<some-registry>/cluster-api-provider-vmwaredesktop:tag
+### Required env variables
+```
+# Example
+VMREST_URL="http://host.docker.internal:8697/api" # http://localhost:8697/api vmrest url
+VMREST_USERNAME="user"
+VMREST_PASSWORD="password"
+TEMPLATE_VM_ID="LIVK1CGKIC5J71SNTC711F7O9TR3BDDQ" # VM ID from vmrest/api/vms prepared with defined kubernetes version
 ```
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
-
-**Install the CRDs into the cluster:**
-
-```sh
-make install
-```
-
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
-
-```sh
-make deploy IMG=<some-registry>/cluster-api-provider-vmwaredesktop:tag
-```
-
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
-
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
-
-```sh
-kubectl apply -k config/samples/
-```
-
->**NOTE**: Ensure that the samples has default values to test it out.
-
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
-
-```sh
-kubectl delete -k config/samples/
-```
-
-**Delete the APIs(CRDs) from the cluster:**
-
-```sh
-make uninstall
-```
-
-**UnDeploy the controller from the cluster:**
-
-```sh
-make undeploy
-```
-
-## Project Distribution
-
-Following the options to release and provide this solution to the users.
-
-### By providing a bundle with all YAML files
-
-1. Build the installer for the image built and published in the registry:
-
-```sh
-make build-installer IMG=<some-registry>/cluster-api-provider-vmwaredesktop:tag
-```
-
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
-
-2. Using the installer
-
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/cluster-api-provider-vmwaredesktop/<tag or branch>/dist/install.yaml
-```
-
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-kubebuilder edit --plugins=helm/v1-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+### Available template flavors `--flavor`
+- flannel
+- talos
 
 ## License
 
