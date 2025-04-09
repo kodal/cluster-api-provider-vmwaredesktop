@@ -20,6 +20,10 @@ VMREST_PASSWORD="password"
 TEMPLATE_VM_ID="LIVK1CGKIC5J71SNTC711F7O9TR3BDDQ" # VM ID from vmrest/api/vms prepared with defined kubernetes version
 ```
 
+### Available template flavors `--flavor`
+- flannel
+- talos
+
 ## License
 
 Copyright 2025.
