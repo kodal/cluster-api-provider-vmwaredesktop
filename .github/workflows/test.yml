@@ -2,11 +2,15 @@ name: Tests
 
 on:
   push:
-  pull_request:
+    branches:
+      - main
+  pull_request_target:
+    branches:
+      - main
 
 jobs:
   test:
-    name: Run on Ubuntu
+    name: test
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code
@@ -20,4 +24,5 @@ jobs:
       - name: Running Tests
         run: |
           go mod tidy
+          make verify
           make test
