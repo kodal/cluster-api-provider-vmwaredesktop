@@ -27,5 +27,15 @@ go.work
 *~
 
 # Tilt files
-.envrc
 .tiltbuild
+
+# direnv files
+.envrc
+
+# e2e
+_artifacts
+**e2e.test
+test/e2e/config/*-envsubst.yaml
+
+# release
+out/
