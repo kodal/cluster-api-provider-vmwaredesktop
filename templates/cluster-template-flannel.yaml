@@ -380,7 +380,7 @@ data:
                   fieldPath: metadata.namespace
             - name: EVENT_QUEUE_DEPTH
               value: "5000"
-            image: ghcr.io/flannel-io/flannel:v0.26.5
+            image: ghcr.io/flannel-io/flannel:${KUBE_FLANNEL_VERSION=v0.26.6}
             name: kube-flannel
             resources:
               requests:
@@ -418,7 +418,7 @@ data:
             - /etc/cni/net.d/10-flannel.conflist
             command:
             - cp
-            image: ghcr.io/flannel-io/flannel:v0.26.5
+            image: ghcr.io/flannel-io/flannel:${KUBE_FLANNEL_VERSION=v0.26.6}
             name: install-cni
             volumeMounts:
             - mountPath: /etc/cni/net.d
