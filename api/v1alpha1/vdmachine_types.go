@@ -41,6 +41,16 @@ type VDMachineSpec struct {
 	// ID of the template VM to clone.
 	TemplateID string `json:"templateID"`
 
+	// Cpu is the number of CPUs for the VM.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	Cpu *int32 `json:"cpu,omitempty"`
+
+	// Memory is the amount of memory for the VM.
+	// +kubebuilder:validation:MultipleOf=8
+	// +optional
+	Memory *int32 `json:"memory,omitempty"`
+
 	// Cloud Init network_config
 	// +optional
 	NetworkConfig *string `json:"networkConfig,omitempty"`
@@ -76,9 +86,22 @@ type VDMachineStatus struct {
 	// +optional
 	Initialization InitializationStatus `json:"initialization,omitempty"`
 
+	// Hardware represents the hardware configuration of the VM.
+	// +optional
+	Hardware VDHardware `json:"hardware,omitempty"`
+
 	// VM power state.
 	// +optional
 	State *string `json:"state,omitempty"`
+}
+
+type VDHardware struct {
+	// Cpu is the number of CPUs for the VM.
+	// +optional
+	Cpu int32 `json:"cpu,omitempty"`
+	// Memory is the amount of memory for the VM.
+	// +optional
+	Memory int32 `json:"memory,omitempty"`
 }
 
 // +kubebuilder:object:root=true
