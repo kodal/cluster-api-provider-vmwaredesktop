@@ -68,6 +68,16 @@ spec:
                   spec:
                     description: VDMachineSpec defines the desired state of VDMachine.
                     properties:
+                      cpu:
+                        description: Cpu is the number of CPUs for the VM.
+                        format: int32
+                        minimum: 1
+                        type: integer
+                      memory:
+                        description: Memory is the amount of memory for the VM.
+                        format: int32
+                        multipleOf: 8
+                        type: integer
                       networkConfig:
                         description: Cloud Init network_config
                         type: string

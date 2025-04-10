@@ -1,6 +1,6 @@
 name: vmwaredesktop
 config:
-  image: ghcr.io/kodal/cluster-api-provider-vmwaredesktop:dev
+  image: ghcr.io/kodal/cluster-api-provider-vmwaredesktop
   label: CAVD
   go_main: cmd/main.go
   live_reload_deps: ["go.mod", "go.sum", "api", "cmd", "internal", "pkg", "templates"]

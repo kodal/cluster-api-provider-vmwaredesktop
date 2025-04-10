@@ -21,6 +21,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -160,11 +162,17 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		}
 
 		logger.Info("Creating VM", "templateId", vdMachine.Spec.TemplateID)
-		vm, _, err := client.VMManagementApi.CreateVM(ctx, clone, nil)
+		vm, response, err := client.VMManagementApi.CreateVM(ctx, clone, nil)
 		if err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("failed to create VM: %v, response: %s", err, GetResponseBody(response))
 		}
 		r.SetID(vdMachine, &vm.Id)
+
+		hardware := infrav1.VDHardware{
+			Cpu:    vm.Cpu.Processors,
+			Memory: vm.Memory,
+		}
+		vdMachine.Status.Hardware = hardware
 		logger.Info("VM created", "id", vm.Id)
 		return ctrl.Result{}, nil
 	}
@@ -218,6 +226,41 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		return ctrl.Result{}, nil
 	}
 
+	cpuConfigured := vdMachine.Spec.Cpu == nil || *vdMachine.Spec.Cpu == vdMachine.Status.Hardware.Cpu
+	memoryConfigured := vdMachine.Spec.Memory == nil || *vdMachine.Spec.Memory == vdMachine.Status.Hardware.Memory
+
+	if !cpuConfigured || !memoryConfigured {
+
+		cpu := vdMachine.Status.Hardware.Cpu
+		memory := vdMachine.Status.Hardware.Memory
+		if vdMachine.Spec.Cpu != nil {
+			cpu = *vdMachine.Spec.Cpu
+		}
+		if vdMachine.Spec.Memory != nil {
+			memory = *vdMachine.Spec.Memory
+		}
+
+		logger.Info("Updating VM hardware", "cpu", cpu, "memory", memory)
+
+		vdParameter := vmrest.VmParameter{
+			Processors: cpu,
+			Memory:     memory,
+		}
+
+		result, response, err := client.VMManagementApi.UpdateVM(ctx, vdParameter, vmId, nil)
+		if err != nil {
+			responseBody := GetResponseBody(response)
+			return ctrl.Result{}, fmt.Errorf("failed to update VM hardware: %v, response: %s", err, responseBody)
+		}
+		logger.Info("VM hardware updated", "result", result)
+		hardware := infrav1.VDHardware{
+			Cpu:    result.Cpu.Processors,
+			Memory: result.Memory,
+		}
+		vdMachine.Status.Hardware = hardware
+		return ctrl.Result{}, nil
+	}
+
 	vmState := vdMachine.Status.State
 	if vmState == nil || *vmState == "poweringOn" {
 		message := "Getting power state of VM"
@@ -250,7 +293,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 				vdMachine.Spec.ProviderID = nil
 				return ctrl.Result{}, nil
 			}
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("failed to power on VM: %v, response: %s", err, GetResponseBody(response))
 		}
 
 		vdMachine.Status.State = &powerState.PowerState
@@ -285,6 +328,17 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func GetResponseBody(response *http.Response) string {
+	if response == nil || response.Body == nil {
+		return ""
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return ""
+	}
+	return string(body)
 }
 
 func (r *VDMachineReconciler) reconcileDelete(ctx context.Context, vdMachine *infrav1.VDMachine) (_ ctrl.Result, rerr error) { // nolint:unparam
