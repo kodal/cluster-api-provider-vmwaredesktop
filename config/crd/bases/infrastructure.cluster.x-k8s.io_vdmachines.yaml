@@ -53,9 +53,13 @@ spec:
                 description: Cloud Init network_config
                 type: string
               providerID:
+                description: vmwaredesktop://VmID
                 type: string
               templateID:
                 description: ID of the template VM to clone.
+                type: string
+              vmID:
+                description: VM ID.
                 type: string
             required:
             - templateID

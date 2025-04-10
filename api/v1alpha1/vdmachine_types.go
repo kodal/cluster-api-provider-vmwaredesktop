@@ -35,8 +35,13 @@ type VDMachineSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// vmwaredesktop://VmID
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
+
+	// VM ID.
+	// +optional
+	VmID *string `json:"vmID,omitempty"`
 
 	// ID of the template VM to clone.
 	TemplateID string `json:"templateID"`

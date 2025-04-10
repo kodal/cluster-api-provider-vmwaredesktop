@@ -79,7 +79,7 @@ func (r *VDMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		return ctrl.Result{}, err
 	}
-	logger = logger.WithValues("providerID", vdMachine.Spec.ProviderID)
+	logger = logger.WithValues("vmID", vdMachine.Spec.VmID)
 
 	// Fetch the Machine.
 	machine, err := util.GetOwnerMachine(ctx, r.Client, vdMachine.ObjectMeta)
@@ -155,7 +155,11 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 
 	client, ctx := NewVDClient(ctx)
 
-	if r.GetID(vdMachine) == nil {
+	vmId := vdMachine.Spec.VmID
+
+	logger = logger.WithValues("vmID", vmId)
+
+	if vmId == nil {
 		clone := vmrest.VmCloneParameter{
 			Name:     vdMachine.Name,
 			ParentId: vdMachine.Spec.TemplateID,
@@ -166,7 +170,9 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to create VM: %v, response: %s", err, GetResponseBody(response))
 		}
-		r.SetID(vdMachine, &vm.Id)
+		providerID := fmt.Sprintf("vmwaredesktop://%s", vm.Id)
+		vdMachine.Spec.ProviderID = &providerID
+		vdMachine.Spec.VmID = &vm.Id
 
 		hardware := infrav1.VDHardware{
 			Cpu:    vm.Cpu.Processors,
@@ -176,10 +182,6 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		logger.Info("VM created", "id", vm.Id)
 		return ctrl.Result{}, nil
 	}
-
-	vmId := *r.GetID(vdMachine)
-
-	logger = logger.WithValues("providerID", vmId)
 
 	if !vdMachine.Status.Initialization.BootstrapDataProvided {
 
@@ -200,7 +202,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		if vdMachine.Spec.NetworkConfig != nil {
 			networkConfig = *vdMachine.Spec.NetworkConfig
 		}
-		metadata := fmt.Sprintf("instance-id: %s\nlocal-hostname: %s\n%s", *r.GetID(vdMachine), vdMachine.Name, networkConfig)
+		metadata := fmt.Sprintf("instance-id: %s\nlocal-hostname: %s\n%s", *vmId, vdMachine.Name, networkConfig)
 		encodedMetadata := base64.StdEncoding.EncodeToString([]byte(metadata))
 
 		params := map[string]string{
@@ -215,7 +217,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 				Name:  name,
 				Value: value,
 			}
-			_, _, err := client.VMManagementApi.ConfigVMParams(ctx, configParam, vmId, nil)
+			_, _, err := client.VMManagementApi.ConfigVMParams(ctx, configParam, *vmId, nil)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -247,7 +249,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 			Memory:     memory,
 		}
 
-		result, response, err := client.VMManagementApi.UpdateVM(ctx, vdParameter, vmId, nil)
+		result, response, err := client.VMManagementApi.UpdateVM(ctx, vdParameter, *vmId, nil)
 		if err != nil {
 			responseBody := GetResponseBody(response)
 			return ctrl.Result{}, fmt.Errorf("failed to update VM hardware: %v, response: %s", err, responseBody)
@@ -267,7 +269,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 
 		logger.Info(message)
 
-		powerState, response, err := client.VMPowerManagementApi.GetPowerState(ctx, vmId, nil)
+		powerState, response, err := client.VMPowerManagementApi.GetPowerState(ctx, *vmId, nil)
 		if err != nil {
 			if response.StatusCode == 404 {
 				logger.Info("VM not found")
@@ -286,7 +288,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 
 		logger.Info(message)
 
-		powerState, response, err := client.VMPowerManagementApi.ChangePowerState(ctx, "on", vmId, nil)
+		powerState, response, err := client.VMPowerManagementApi.ChangePowerState(ctx, "on", *vmId, nil)
 		if err != nil {
 			if response.StatusCode == 404 {
 				logger.Info("VM not found")
@@ -305,7 +307,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 
 		logger.Info(message)
 
-		ip, response, err := client.VMNetworkAdaptersManagementApi.GetIPAddress(ctx, vmId, nil)
+		ip, response, err := client.VMNetworkAdaptersManagementApi.GetIPAddress(ctx, *vmId, nil)
 		if err != nil {
 			if response.StatusCode == 500 {
 				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
@@ -344,7 +346,7 @@ func GetResponseBody(response *http.Response) string {
 func (r *VDMachineReconciler) reconcileDelete(ctx context.Context, vdMachine *infrav1.VDMachine) (_ ctrl.Result, rerr error) { // nolint:unparam
 	logger := log.FromContext(ctx)
 
-	vmId := r.GetID(vdMachine)
+	vmId := vdMachine.Spec.VmID
 	if vmId == nil {
 		logger.Info("VM is already deleted")
 		controllerutil.RemoveFinalizer(vdMachine, infrav1.MachineFinalizer)
@@ -413,22 +415,4 @@ func (r *VDMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		Named("vdmachine").
 		Complete(r)
-}
-
-func (r *VDMachineReconciler) GetID(m *infrav1.VDMachine) *string {
-	if m.Spec.ProviderID == nil {
-		return nil
-	}
-	providerID := *m.Spec.ProviderID
-	id := providerID[len("vmwaredesktop://"):]
-	return &id
-}
-
-func (r *VDMachineReconciler) SetID(m *infrav1.VDMachine, id *string) {
-	if id == nil {
-		m.Spec.ProviderID = nil
-		return
-	}
-	providerID := "vmwaredesktop://" + *id
-	m.Spec.ProviderID = &providerID
 }

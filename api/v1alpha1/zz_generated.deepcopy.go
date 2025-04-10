@@ -213,6 +213,11 @@ func (in *VDMachineSpec) DeepCopyInto(out *VDMachineSpec) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.VmID != nil {
+		in, out := &in.VmID, &out.VmID
+		*out = new(string)
+		**out = **in
+	}
 	if in.Cpu != nil {
 		in, out := &in.Cpu, &out.Cpu
 		*out = new(int32)
