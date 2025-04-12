@@ -34,7 +34,7 @@ var _ = Describe("Running the Cluster API E2E tests", func() {
 	)
 
 	BeforeEach(func() {
-		Expect(e2eConfig.Variables).To(HaveKey(KubernetesVersion))
+		Expect(e2eConfig.Variables).To(HaveKey(capi_e2e.KubernetesVersion))
 		Expect(e2eConfig.Variables).To(HaveKey(capi_e2e.KubernetesVersionUpgradeFrom))
 		Expect(e2eConfig.Variables).To(HaveKey(capi_e2e.KubernetesVersionUpgradeTo))
 		Expect(e2eConfig.Variables).To(HaveKey(capi_e2e.CPMachineTemplateUpgradeTo))

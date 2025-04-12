@@ -30,11 +30,9 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/util"
-)
 
-func Byf(format string, a ...interface{}) {
-	By(fmt.Sprintf(format, a...))
-}
+	. "sigs.k8s.io/cluster-api/test/e2e"
+)
 
 func setupSpecNamespace(ctx context.Context, specName string, clusterProxy framework.ClusterProxy, artifactFolder string) (*corev1.Namespace, context.CancelFunc) {
 	Byf("Creating a namespace for hosting the %q test spec", specName)
@@ -84,7 +82,7 @@ func dumpSpecResourcesAndCleanup(ctx context.Context, input cleanupInput) {
 		By("Unable to dump workload cluster logs as the cluster is nil")
 	} else {
 		Byf("Dumping logs from the %q workload cluster", input.Cluster.Name)
-		input.ClusterProxy.CollectWorkloadClusterLogs(ctx, input.Cluster.Namespace, input.Cluster.Name, filepath.Join(input.ArtifactFolder, "clusters", input.Cluster.Name))
+		dumpBootstrapClusterLogs(input.ClusterProxy)
 	}
 
 	Byf("Dumping all the Cluster API resources in the %q namespace", input.Namespace.Name)

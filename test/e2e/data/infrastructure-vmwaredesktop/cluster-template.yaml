@@ -62,7 +62,8 @@ spec:
           provider-id: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
     users:
       - name: root
-        sshAuthorizedKeys: [${VM_SSH_KEYS}]
+        sshAuthorizedKeys: 
+          - ${VM_SSH_KEYS}
 
     files:
       - content: |
@@ -95,7 +96,7 @@ spec:
                 value: "10"
               - name: vip_retryperiod
                 value: "2"
-              image: ghcr.io/kube-vip/kube-vip:v0.8.9
+              image: ghcr.io/kube-vip/kube-vip:${KUBE_VIP_VERSION=v0.8.10}
               imagePullPolicy: IfNotPresent
               name: kube-vip
               resources: {}
@@ -170,8 +171,7 @@ spec:
         permissions: "0700"
     preKubeadmCommands:
       - /etc/kube-vip-prepare.sh
-
----
+      - timedatectl set-ntp true
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
@@ -214,7 +214,8 @@ spec:
     spec:
       users:
         - name: root
-          sshAuthorizedKeys: [${VM_SSH_KEYS}]
+          sshAuthorizedKeys: 
+            - ${VM_SSH_KEYS}
       joinConfiguration:
         nodeRegistration:
           kubeletExtraArgs:
@@ -380,7 +381,7 @@ data:
                   fieldPath: metadata.namespace
             - name: EVENT_QUEUE_DEPTH
               value: "5000"
-            image: ghcr.io/flannel-io/flannel:v0.26.5
+            image: ghcr.io/flannel-io/flannel:${KUBE_FLANNEL_VERSION=v0.26.6}
             name: kube-flannel
             resources:
               requests:
@@ -418,7 +419,7 @@ data:
             - /etc/cni/net.d/10-flannel.conflist
             command:
             - cp
-            image: ghcr.io/flannel-io/flannel:v0.26.5
+            image: ghcr.io/flannel-io/flannel:${KUBE_FLANNEL_VERSION=v0.26.6}
             name: install-cni
             volumeMounts:
             - mountPath: /etc/cni/net.d
