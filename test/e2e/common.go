@@ -26,6 +26,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
@@ -82,7 +83,7 @@ func dumpSpecResourcesAndCleanup(ctx context.Context, input cleanupInput) {
 		By("Unable to dump workload cluster logs as the cluster is nil")
 	} else {
 		Byf("Dumping logs from the %q workload cluster", input.Cluster.Name)
-		dumpBootstrapClusterLogs(input.ClusterProxy)
+		dumpBootstrapClusterLogsCommon(ctx, input)
 	}
 
 	Byf("Dumping all the Cluster API resources in the %q namespace", input.Namespace.Name)
@@ -118,5 +119,45 @@ func dumpSpecResourcesAndCleanup(ctx context.Context, input cleanupInput) {
 	if input.AdditionalCleanup != nil {
 		Byf("Running additional cleanup for the %q test spec", input.SpecName)
 		input.AdditionalCleanup()
+	}
+}
+
+func dumpBootstrapClusterLogsCommon(ctx context.Context, input cleanupInput) {
+	bootstrapClusterProxy := input.ClusterProxy
+	artifactFolder := input.ArtifactFolder
+
+	if bootstrapClusterProxy == nil {
+		return
+	}
+
+	clusterLogCollector := bootstrapClusterProxy.GetLogCollector()
+	if clusterLogCollector == nil {
+		return
+	}
+
+	nodes, err := bootstrapClusterProxy.GetClientSet().CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		fmt.Printf("Failed to get nodes for the bootstrap cluster: %v\n", err)
+		return
+	}
+
+	for i := range nodes.Items {
+		nodeName := nodes.Items[i].GetName()
+		err = clusterLogCollector.CollectMachineLog(
+			ctx,
+			bootstrapClusterProxy.GetClient(),
+			// The bootstrap cluster is not expected to be a CAPI cluster, so in order to re-use the logCollector,
+			// we create a fake machine that wraps the node.
+			// NOTE: This assumes a naming convention between machines and nodes, which e.g. applies to the bootstrap clusters generated with kind.
+			//       This might not work if you are using an existing bootstrap cluster provided by other means.
+			&clusterv1.Machine{
+				Spec:       clusterv1.MachineSpec{ClusterName: nodeName},
+				ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+			},
+			filepath.Join(artifactFolder, "clusters", bootstrapClusterProxy.GetName(), "machines", nodeName),
+		)
+		if err != nil {
+			fmt.Printf("Failed to get logs for the bootstrap cluster node %s: %v\n", nodeName, err)
+		}
 	}
 }
