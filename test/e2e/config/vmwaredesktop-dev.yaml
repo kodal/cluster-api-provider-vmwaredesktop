@@ -65,6 +65,8 @@ providers:
         targetName: "metadata.yaml"
       - sourcePath: "${PWD}/test/e2e/data/infrastructure-vmwaredesktop/cluster-template.yaml"
         targetName: "cluster-template.yaml"
+      - sourcePath: "${PWD}/test/e2e/data/infrastructure-vmwaredesktop/cluster-template-upgrades.yaml"
+        targetName: "cluster-template-upgrades.yaml"
 
 variables:
   KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.31.4}"
@@ -81,8 +83,9 @@ variables:
   KUBERNETES_VERSION_MANAGEMENT: "${KUBERNETES_VERSION_MANAGEMENT:-v1.32.2}"
   KUBERNETES_VERSION_UPGRADE_FROM: "${KUBERNETES_VERSION_UPGRADE_FROM:-v1.31.4}"
   KUBERNETES_VERSION_UPGRADE_TO: "${KUBERNETES_VERSION_UPGRADE_TO:-v1.32.3}"
-  CONTROL_PLANE_MACHINE_TEMPLATE_UPGRADE_TO: "${CONTROL_PLANE_MACHINE_TEMPLATE_UPGRADE_TO:-8NBGFTCOFOL6QUBE7L8V86LIA29L0LGU}"
-  WORKERS_MACHINE_TEMPLATE_UPGRADE_TO: "${WORKERS_MACHINE_TEMPLATE_UPGRADE_TO:-8NBGFTCOFOL6QUBE7L8V86LIA29L0LGU}"
+  CONTROL_PLANE_MACHINE_TEMPLATE_UPGRADE_TO: "${CONTROL_PLANE_MACHINE_TEMPLATE_UPGRADE_TO:-control-plane-upgrade-to}"
+  WORKERS_MACHINE_TEMPLATE_UPGRADE_TO: "${WORKERS_MACHINE_TEMPLATE_UPGRADE_TO:-worker-upgrade-to}"
+  TEMPLATE_VM_ID_UPGRADE_TO: "${TEMPLATE_VM_ID_UPGRADE_TO:-8NBGFTCOFOL6QUBE7L8V86LIA29L0LGU}"
 
   CNI: "${PWD}/test/e2e/data/cni/flannel.yaml"
   IP_FAMILY: "IPv4"
@@ -105,4 +108,7 @@ intervals:
   default/wait-deployment: ["5m", "10s"]
   default/wait-job: ["5m", "10s"]
   default/wait-service: ["3m", "10s"]
-  node-drain/wait-machine-deleted: ["10m", "10s"]
+  default/wait-machines: ["20m", "10s"]
+  default/wait-machines-stable: ["20m", "10s"]
+  node-drain/wait-machine-deleted: ["20m", "10s"]
+  default/wait-nodes-ready: ["10m", "10s"]

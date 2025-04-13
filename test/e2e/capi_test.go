@@ -70,17 +70,18 @@ var _ = Describe("Running the Cluster API E2E tests", func() {
 	//	})
 	//})
 
-	Context("Should successfully remediate unhealthy machines with MachineHealthCheck", func() {
-		capi_e2e.KCPRemediationSpec(ctx, func() capi_e2e.KCPRemediationSpecInput {
-			return capi_e2e.KCPRemediationSpecInput{
-				E2EConfig:             e2eConfig,
-				ClusterctlConfigPath:  clusterctlConfigPath,
-				BootstrapClusterProxy: bootstrapClusterProxy,
-				ArtifactFolder:        artifactFolder,
-				SkipCleanup:           skipCleanup,
-			}
-		})
-	})
+	// TODO No connectivity from workload cluster to the bootstrap cluster for signal
+	// Context("[HealthCheck] Should successfully remediate unhealthy machines with MachineHealthCheck", func() {
+	// 	capi_e2e.KCPRemediationSpec(ctx, func() capi_e2e.KCPRemediationSpecInput {
+	// 		return capi_e2e.KCPRemediationSpecInput{
+	// 			E2EConfig:             e2eConfig,
+	// 			ClusterctlConfigPath:  clusterctlConfigPath,
+	// 			BootstrapClusterProxy: bootstrapClusterProxy,
+	// 			ArtifactFolder:        artifactFolder,
+	// 			SkipCleanup:           skipCleanup,
+	// 		}
+	// 	})
+	// })
 
 	Context("Running the workload cluster upgrade spec [K8s-Upgrade]", func() {
 		capi_e2e.ClusterUpgradeConformanceSpec(ctx, func() capi_e2e.ClusterUpgradeConformanceSpecInput {
