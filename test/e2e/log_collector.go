@@ -21,24 +21,40 @@ import (
 
 const (
 	DefaultUserName       = "root"
-	SshPrivateKeyFilePath = "VD_SSH_PRIVATE_KEY_PATH"
+	SSHPrivateKeyFilePath = "VD_SSH_PRIVATE_KEY_PATH"
 )
 
+// MachineLogCollector implements log collection for VMware Desktop machines.
 type MachineLogCollector struct {
 }
 
 // CollectInfrastructureLogs implements framework.ClusterLogCollector.
-func (m MachineLogCollector) CollectInfrastructureLogs(ctx context.Context, managementClusterClient client.Client, c *v1beta1.Cluster, outputPath string) error {
+func (m MachineLogCollector) CollectInfrastructureLogs(
+	ctx context.Context,
+	managementClusterClient client.Client,
+	c *v1beta1.Cluster,
+	outputPath string,
+) error {
 	return nil
 }
 
 // CollectMachinePoolLog implements framework.ClusterLogCollector.
-func (MachineLogCollector) CollectMachinePoolLog(ctx context.Context, managementClusterClient client.Client, m *expv1.MachinePool, outputPath string) error {
+func (MachineLogCollector) CollectMachinePoolLog(
+	ctx context.Context,
+	managementClusterClient client.Client,
+	m *expv1.MachinePool,
+	outputPath string,
+) error {
 	return nil
 }
 
 // CollectMachineLog implements framework.ClusterLogCollector.
-func (MachineLogCollector) CollectMachineLog(ctx context.Context, managementClusterClient client.Client, m *v1beta1.Machine, outputPath string) error {
+func (MachineLogCollector) CollectMachineLog(
+	ctx context.Context,
+	managementClusterClient client.Client,
+	m *v1beta1.Machine,
+	outputPath string,
+) error {
 	if len(m.Status.Addresses) == 0 {
 		return errors.Errorf("machine %s has no addresses", klog.KObj(m))
 	}
@@ -50,7 +66,11 @@ func (MachineLogCollector) CollectMachineLog(ctx context.Context, managementClus
 			if err != nil {
 				return err
 			}
-			defer f.Close()
+			defer func() {
+				if cerr := f.Close(); cerr != nil {
+					err = errors.Wrap(cerr, "failed to close output file")
+				}
+			}()
 			if err := executeRemoteCommand(f, address, command, args...); err != nil {
 				return errors.Wrapf(err, "failed to run command %s for machine %s on ips [%s]", command, klog.KObj(m), address)
 			}
@@ -88,13 +108,21 @@ func executeRemoteCommand(f io.StringWriter, hostIPAddr, command string, args ..
 	if err != nil {
 		return errors.Wrapf(err, "dialing host IP address at %s", hostIPAddr)
 	}
-	defer hostClient.Close()
+	defer func() {
+		if cerr := hostClient.Close(); cerr != nil {
+			err = errors.Wrap(cerr, "failed to close SSH client")
+		}
+	}()
 
 	session, err := hostClient.NewSession()
 	if err != nil {
 		return errors.Wrap(err, "opening SSH session")
 	}
-	defer session.Close()
+	defer func() {
+		if cerr := session.Close(); cerr != nil {
+			err = errors.Wrap(cerr, "failed to close SSH session")
+		}
+	}()
 
 	// Run the command and write the captured stdout to the file
 	var stdoutBuf bytes.Buffer
@@ -136,9 +164,9 @@ func newSSHConfig() (*ssh.ClientConfig, error) {
 }
 
 func readPrivateKey() ([]byte, error) {
-	privateKeyFilePath := os.Getenv(SshPrivateKeyFilePath)
+	privateKeyFilePath := os.Getenv(SSHPrivateKeyFilePath)
 	if privateKeyFilePath == "" {
-		return nil, errors.Errorf("private key information missing. Please set %s environment variable", SshPrivateKeyFilePath)
+		return nil, errors.Errorf("private key missing. Please set %s env var", SSHPrivateKeyFilePath)
 	}
 
 	return os.ReadFile(filepath.Clean(privateKeyFilePath))
@@ -149,13 +177,12 @@ func aggregateConcurrent(funcs ...func() error) error {
 	// run all fns concurrently
 	ch := make(chan error, len(funcs))
 	var wg sync.WaitGroup
-	for _, f := range funcs {
-		f := f
+	for _, fn := range funcs {
 		wg.Add(1)
-		go func() {
+		go func(f func() error) {
 			defer wg.Done()
 			ch <- f()
-		}()
+		}(fn)
 	}
 	wg.Wait()
 	close(ch)
