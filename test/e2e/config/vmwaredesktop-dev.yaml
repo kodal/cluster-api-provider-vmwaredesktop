@@ -53,7 +53,7 @@ providers:
   - name: vmwaredesktop
     type: InfrastructureProvider
     versions:
-      - name: v0.1.1
+      - name: v0.1.99
         value: "${PWD}/config/default"
         replacements:
           - old: ghcr.io/kodal/cluster-api-provider-vmwaredesktop:dev
@@ -63,8 +63,10 @@ providers:
     files:
       - sourcePath: "${PWD}/metadata.yaml"
         targetName: "metadata.yaml"
-      - sourcePath: "${PWD}/test/e2e/data/infrastructure-vmwaredesktop/cluster-template-ci.yaml"
+      - sourcePath: "${PWD}/test/e2e/data/infrastructure-vmwaredesktop/cluster-template.yaml"
         targetName: "cluster-template.yaml"
+      - sourcePath: "${PWD}/test/e2e/data/infrastructure-vmwaredesktop/cluster-template-upgrades.yaml"
+        targetName: "cluster-template-upgrades.yaml"
 
 variables:
   KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.31.4}"
@@ -73,16 +75,24 @@ variables:
   VM_SSH_KEYS: "ssh-ed25519 ..."
   CONTROL_PLANE_ENDPOINT_IP: "172.16.62.10"
 
-
   VMREST_URL: "${VMREST_URL:-http://host.docker.internal:8697/api}"
   VMREST_USERNAME: "${VMREST_USERNAME:-admin}"
   VMREST_PASSWORD: "${VMREST_PASSWORD:-Admin123.}"
   TEMPLATE_VM_ID: "${TEMPLATE_VM_ID:-LIVK1CGKIC5J71SNTC711F7O9TR3BDDQ}"
-  TEMPLATEID_UPGRADE_TO: "${TEMPLATEID_UPGRADE_TO:-8NBGFTCOFOL6QUBE7L8V86LIA29L0LGU}"
+
+  KUBERNETES_VERSION_MANAGEMENT: "${KUBERNETES_VERSION_MANAGEMENT:-v1.32.2}"
+  KUBERNETES_VERSION_UPGRADE_FROM: "${KUBERNETES_VERSION_UPGRADE_FROM:-v1.31.4}"
+  KUBERNETES_VERSION_UPGRADE_TO: "${KUBERNETES_VERSION_UPGRADE_TO:-v1.32.3}"
+  CONTROL_PLANE_MACHINE_TEMPLATE_UPGRADE_TO: "${CONTROL_PLANE_MACHINE_TEMPLATE_UPGRADE_TO:-control-plane-upgrade-to}"
+  WORKERS_MACHINE_TEMPLATE_UPGRADE_TO: "${WORKERS_MACHINE_TEMPLATE_UPGRADE_TO:-worker-upgrade-to}"
+  TEMPLATE_VM_ID_UPGRADE_TO: "${TEMPLATE_VM_ID_UPGRADE_TO:-8NBGFTCOFOL6QUBE7L8V86LIA29L0LGU}"
+
+  CNI: "${PWD}/test/e2e/data/cni/flannel.yaml"
+  IP_FAMILY: "IPv4"
 
   CONFORMANCE_WORKER_MACHINE_COUNT: "2"
   CONFORMANCE_CONTROL_PLANE_MACHINE_COUNT: "${CONFORMANCE_CONTROL_PLANE_MACHINE_COUNT:-1}"
-  CONFORMANCE_NODES: "${CONFORMANCE_NODES:-4}"
+  CONFORMANCE_NODES: "${CONFORMANCE_NODES:-2}"
   KUBETEST_CONFIGURATION: "${PWD}/test/e2e/data/kubetest/conformance.yaml"
 
   EXP_KUBEADM_BOOTSTRAP_FORMAT_IGNITION: false
@@ -98,4 +108,7 @@ intervals:
   default/wait-deployment: ["5m", "10s"]
   default/wait-job: ["5m", "10s"]
   default/wait-service: ["3m", "10s"]
-  node-drain/wait-machine-deleted: ["10m", "10s"]
+  default/wait-machines: ["20m", "10s"]
+  default/wait-machines-stable: ["20m", "10s"]
+  node-drain/wait-machine-deleted: ["20m", "10s"]
+  default/wait-nodes-ready: ["10m", "10s"]

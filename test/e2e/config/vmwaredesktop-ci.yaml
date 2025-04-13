@@ -53,7 +53,7 @@ providers:
   - name: vmwaredesktop
     type: InfrastructureProvider
     versions:
-      - name: v0.1.1
+      - name: v0.1.99
         value: "${PWD}/config/default"
         replacements:
           - old: ghcr.io/kodal/cluster-api-provider-vmwaredesktop:dev
@@ -63,7 +63,7 @@ providers:
     files:
       - sourcePath: "${PWD}/metadata.yaml"
         targetName: "metadata.yaml"
-      - sourcePath: "${PWD}/test/e2e/data/infrastructure-vmwaredesktop/cluster-template-ci.yaml"
+      - sourcePath: "${PWD}/test/e2e/data/infrastructure-vmwaredesktop/cluster-template.yaml"
         targetName: "cluster-template.yaml"
 
 variables:

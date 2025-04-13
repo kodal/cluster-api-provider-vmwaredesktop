@@ -31,6 +31,8 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	"sigs.k8s.io/cluster-api/util"
+
+	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 )
 
 var _ = Describe("Workload cluster creation", func() {
@@ -50,7 +52,7 @@ var _ = Describe("Workload cluster creation", func() {
 		Expect(bootstrapClusterProxy).ToNot(BeNil(), "Invalid argument. bootstrapClusterProxy can't be nil when calling %s spec", specName)
 		Expect(os.MkdirAll(artifactFolder, 0755)).To(Succeed(), "Invalid argument. artifactFolder can't be created for %s spec", specName)
 
-		Expect(e2eConfig.Variables).To(HaveKey(KubernetesVersion))
+		Expect(e2eConfig.Variables).To(HaveKey(capi_e2e.KubernetesVersion))
 
 		clusterName = fmt.Sprintf("cavd-e2e-%s", util.RandomString(6))
 
@@ -92,7 +94,7 @@ var _ = Describe("Workload cluster creation", func() {
 					Flavor:                   clusterctl.DefaultFlavor,
 					Namespace:                namespace.Name,
 					ClusterName:              clusterName,
-					KubernetesVersion:        e2eConfig.GetVariableOrEmpty(KubernetesVersion),
+					KubernetesVersion:        e2eConfig.GetVariableOrEmpty(capi_e2e.KubernetesVersion),
 					ControlPlaneMachineCount: pointer.Int64Ptr(1),
 					WorkerMachineCount:       pointer.Int64Ptr(1),
 				},
@@ -112,7 +114,7 @@ var _ = Describe("Workload cluster creation", func() {
 					Flavor:                   clusterctl.DefaultFlavor,
 					Namespace:                namespace.Name,
 					ClusterName:              clusterName,
-					KubernetesVersion:        e2eConfig.GetVariableOrEmpty(KubernetesVersion),
+					KubernetesVersion:        e2eConfig.GetVariableOrEmpty(capi_e2e.KubernetesVersion),
 					ControlPlaneMachineCount: pointer.Int64Ptr(1),
 					WorkerMachineCount:       pointer.Int64Ptr(3),
 				},
@@ -136,7 +138,7 @@ var _ = Describe("Workload cluster creation", func() {
 					Flavor:                   clusterctl.DefaultFlavor,
 					Namespace:                namespace.Name,
 					ClusterName:              clusterName,
-					KubernetesVersion:        e2eConfig.GetVariableOrEmpty(KubernetesVersion),
+					KubernetesVersion:        e2eConfig.GetVariableOrEmpty(capi_e2e.KubernetesVersion),
 					ControlPlaneMachineCount: pointer.Int64Ptr(3),
 					WorkerMachineCount:       pointer.Int64Ptr(2),
 				},
@@ -160,7 +162,7 @@ var _ = Describe("Workload cluster creation", func() {
 					Flavor:                   "flatcar",
 					Namespace:                namespace.Name,
 					ClusterName:              clusterName,
-					KubernetesVersion:        e2eConfig.GetVariableOrEmpty(KubernetesVersion),
+					KubernetesVersion:        e2eConfig.GetVariableOrEmpty(capi_e2e.KubernetesVersion),
 					ControlPlaneMachineCount: pointer.Int64Ptr(3),
 					WorkerMachineCount:       pointer.Int64Ptr(2),
 				},

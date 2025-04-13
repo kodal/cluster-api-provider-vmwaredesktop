@@ -265,8 +265,9 @@ clean-tilt: ## Clean up Tilt in a kind cluster.
 ## E2e tests
 ## --------------------------------------
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
-E2E_CONF_FILE ?= $(ROOT_DIR)/test/e2e/config/vmwaredesktop-ci.yaml
-E2E_CONF_FILE_ENVSUBST := $(ROOT_DIR)/test/e2e/config/vmwaredesktop-ci-envsubst.yaml
+E2E_ENV ?= dev
+E2E_CONF_FILE ?= $(ROOT_DIR)/test/e2e/config/vmwaredesktop-$(E2E_ENV).yaml
+E2E_CONF_FILE_ENVSUBST := $(ROOT_DIR)/test/e2e/config/vmwaredesktop-$(E2E_ENV)-envsubst.yaml
 E2E_DATA_DIR ?= $(ROOT_DIR)/test/e2e/data
 KUBETEST_CONF_PATH ?= $(abspath $(E2E_DATA_DIR)/kubetest/conformance.yaml)
 
@@ -278,7 +279,7 @@ GINKGO_NODES ?= 1
 GINKGO_NOCOLOR ?= false
 GINKGO_ARGS ?=
 GINKGO_TIMEOUT ?= 2h
-GINKGO_POLL_PROGRESS_AFTER ?= 10m
+GINKGO_POLL_PROGRESS_AFTER ?= 20m
 GINKGO_POLL_PROGRESS_INTERVAL ?= 1m
 ARTIFACTS ?= $(ROOT_DIR)/_artifacts
 SKIP_CLEANUP ?= false

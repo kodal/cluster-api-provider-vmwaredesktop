@@ -17,7 +17,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package e2e contains the implementation and definition for the E2E tests for CAVD
 package e2e
 
 import (
@@ -31,23 +30,21 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/component-base/logs"
+	logsv1 "k8s.io/component-base/logs/api/v1"
 	"k8s.io/klog/v2"
+	ctrl "sigs.k8s.io/controller-runtime"
+
+	infrav1 "github.com/kodal/cluster-api-provider-vmwaredesktop/api/v1alpha1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/bootstrap"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	"sigs.k8s.io/cluster-api/test/framework/ginkgoextensions"
-	ctrl "sigs.k8s.io/controller-runtime"
 
-	infrav1 "github.com/kodal/cluster-api-provider-vmwaredesktop/api/v1alpha1"
-)
-
-const (
-	KubernetesVersion           = "KUBERNETES_VERSION"
-	KubernetesVersionManagement = "KUBERNETES_VERSION_MANAGEMENT"
+	. "sigs.k8s.io/cluster-api/test/e2e"
 )
 
 // Test suite flags.
@@ -61,19 +58,25 @@ var (
 	// artifactFolder is the folder to store e2e test artifacts.
 	artifactFolder string
 
+	// clusterctlConfig is the file which tests will use as a clusterctl config.
+	// If it is not set, a local clusterctl repository (including a clusterctl config) will be created automatically.
+	clusterctlConfig string
+
 	// alsoLogToFile enables additional logging to the 'ginkgo-log.txt' file in the artifact folder.
 	// These logs also contain timestamps.
 	alsoLogToFile bool
 
 	// skipCleanup prevents cleanup of test resources e.g. for debug purposes.
 	skipCleanup bool
+
+	logOptions = logs.NewOptions()
 )
 
 // Test suite global vars.
 var (
 	ctx = ctrl.SetupSignalHandler()
 
-	// watchesCtx is used in log streaming to be able to get canceled via cancelWatches after ending the test suite.
+	// watchesCtx is used in log streaming to be able to get canceld via cancelWatches after ending the test suite.
 	watchesCtx, cancelWatches = context.WithCancel(ctx)
 
 	// e2eConfig to be used for this test, read from configPath.
@@ -83,37 +86,45 @@ var (
 	// with the providers specified in the configPath.
 	clusterctlConfigPath string
 
-	// bootstrapClusterProvider manages provisioning of the the bootstrap cluster to be used for the e2e tests.
+	// bootstrapClusterProvider manages provisioning of the bootstrap cluster to be used for the e2e tests.
 	// Please note that provisioning will be skipped if e2e.use-existing-cluster is provided.
 	bootstrapClusterProvider bootstrap.ClusterProvider
 
 	// bootstrapClusterProxy allows to interact with the bootstrap cluster to be used for the e2e tests.
 	bootstrapClusterProxy framework.ClusterProxy
-
-	// kubetestConfigFilePath is the path to the kubetest configuration file
-	kubetestConfigFilePath string
-
-	// useCIArtifacts specifies whether or not to use the latest build from the main branch of the Kubernetes repository
-	useCIArtifacts bool
 )
 
 func init() {
 	flag.StringVar(&configPath, "e2e.config", "", "path to the e2e config file")
 	flag.StringVar(&artifactFolder, "e2e.artifacts-folder", "", "folder where e2e test artifact should be stored")
-	flag.BoolVar(&skipCleanup, "e2e.skip-resource-cleanup", false, "if true, the resource cleanup after tests will be skipped")
 	flag.BoolVar(&alsoLogToFile, "e2e.also-log-to-file", true, "if true, ginkgo logs are additionally written to the `ginkgo-log.txt` file in the artifacts folder (including timestamps)")
+	flag.BoolVar(&skipCleanup, "e2e.skip-resource-cleanup", false, "if true, the resource cleanup after tests will be skipped")
+	flag.StringVar(&clusterctlConfig, "e2e.clusterctl-config", "", "file which tests will use as a clusterctl config. If it is not set, a local clusterctl repository (including a clusterctl config) will be created automatically.")
 	flag.BoolVar(&useExistingCluster, "e2e.use-existing-cluster", false, "if true, the test uses the current cluster instead of creating a new one (default discovery rules apply)")
-	flag.BoolVar(&useCIArtifacts, "kubetest.use-ci-artifacts", false, "use the latest build from the main branch of the Kubernetes repository. Set KUBERNETES_VERSION environment variable to latest-1.xx to use the build from 1.xx release branch.")
-	flag.StringVar(&kubetestConfigFilePath, "kubetest.config-file", "", "path to the kubetest configuration file")
+
+	logsv1.AddGoFlags(logOptions, flag.CommandLine)
 }
 
 func TestE2E(t *testing.T) {
 	g := NewWithT(t)
 
+	if err := logsv1.ValidateAndApply(logOptions, nil); err != nil {
+		fmt.Printf("Unable to start tests: %v\n", err)
+		os.Exit(1)
+	}
+
+	// klog.Background will automatically use the right logger.
 	ctrl.SetLogger(klog.Background())
 
+	// If running in prow, make sure to use the artifacts folder that will be reported in test grid (ignoring the value provided by flag).
+	if prowArtifactFolder, exists := os.LookupEnv("ARTIFACTS"); exists {
+		artifactFolder = prowArtifactFolder
+	}
+
 	// ensure the artifacts folder exists
-	g.Expect(os.MkdirAll(artifactFolder, 0o755)).To(Succeed(), "Invalid test suite argument. Can't create e2e.artifacts-folder %q", artifactFolder) //nolint:gosec
+	g.Expect(os.MkdirAll(artifactFolder, 0755)).To(Succeed(), "Invalid test suite argument. Can't create e2e.artifacts-folder %q", artifactFolder) //nolint:gosec
+
+	RegisterFailHandler(Fail)
 
 	if alsoLogToFile {
 		w, err := ginkgoextensions.EnableFileLogging(filepath.Join(artifactFolder, "ginkgo-log.txt"))
@@ -121,7 +132,6 @@ func TestE2E(t *testing.T) {
 		defer w.Close()
 	}
 
-	RegisterFailHandler(Fail)
 	RunSpecs(t, "vmwaredesktop-e2e")
 }
 
@@ -130,25 +140,21 @@ func TestE2E(t *testing.T) {
 var _ = SynchronizedBeforeSuite(func() []byte {
 	// Before all ParallelNodes.
 
-	// vmrest credentials
-	url := os.Getenv("VMREST_URL")
-	username := os.Getenv("VMREST_USERNAME")
-	password := os.Getenv("VMREST_PASSWORD")
-	Expect(url).ToNot(BeEmpty(), "VMREST_URL must be set")
-	Expect(username).ToNot(BeEmpty(), "VMREST_USERNAME must be set")
-	Expect(password).ToNot(BeEmpty(), "VMREST_PASSWORD must be set")
-
 	Expect(configPath).To(BeAnExistingFile(), "Invalid test suite argument. e2e.config should be an existing file.")
-	Expect(os.MkdirAll(artifactFolder, 0755)).To(Succeed(), "Invalid test suite argument. Can't create e2e.artifacts-folder %q", artifactFolder)
 
 	By("Initializing a runtime.Scheme with all the GVK relevant for this test")
 	scheme := initScheme()
 
-	By(fmt.Sprintf("Loading the e2e test configuration from %q", configPath))
+	Byf("Loading the e2e test configuration from %q", configPath)
 	e2eConfig = loadE2EConfig(configPath)
 
-	By(fmt.Sprintf("Creating a clusterctl local repository into %q", artifactFolder))
-	clusterctlConfigPath = createClusterctlLocalRepository(e2eConfig, filepath.Join(artifactFolder, "repository"))
+	if clusterctlConfig == "" {
+		Byf("Creating a clusterctl local repository into %q", artifactFolder)
+		clusterctlConfigPath = createClusterctlLocalRepository(e2eConfig, filepath.Join(artifactFolder, "repository"))
+	} else {
+		Byf("Using existing clusterctl config %q", clusterctlConfig)
+		clusterctlConfigPath = clusterctlConfig
+	}
 
 	By("Setting up the bootstrap cluster")
 	bootstrapClusterProvider, bootstrapClusterProxy = setupBootstrapCluster(e2eConfig, scheme, useExistingCluster)
@@ -166,6 +172,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	)
 }, func(data []byte) {
 	// Before each ParallelNode.
+
 	parts := strings.Split(string(data), ",")
 	Expect(parts).To(HaveLen(4))
 
@@ -175,7 +182,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	kubeconfigPath := parts[3]
 
 	e2eConfig = loadE2EConfig(configPath)
-	bootstrapClusterProxy = framework.NewClusterProxy("bootstrap", kubeconfigPath, initScheme(), framework.WithMachineLogCollector(framework.DockerLogCollector{}))
+	bootstrapClusterProxy = framework.NewClusterProxy("bootstrap", kubeconfigPath, initScheme(), framework.WithMachineLogCollector(MachineLogCollector{}))
 })
 
 // Using a SynchronizedAfterSuite for controlling how to delete resources shared across ParallelNodes (~ginkgo threads).
@@ -185,10 +192,9 @@ var _ = SynchronizedAfterSuite(func() {
 	// After each ParallelNode.
 }, func() {
 	// After all ParallelNodes.
+
 	By("Dumping logs from the bootstrap cluster")
-	if err := dumpBootstrapClusterLogs(); err != nil {
-		GinkgoWriter.Printf("Failed to dump bootstrap cluster logs: %v", err)
-	}
+	dumpBootstrapClusterLogs(bootstrapClusterProxy)
 
 	By("Tearing down the management cluster")
 	if !skipCleanup {
@@ -219,7 +225,6 @@ func createClusterctlLocalRepository(config *clusterctl.E2EConfig, repositoryFol
 
 	clusterctlConfig := clusterctl.CreateRepository(ctx, createRepositoryInput)
 	Expect(clusterctlConfig).To(BeAnExistingFile(), "The clusterctl config file does not exists in the local repository %s", repositoryFolder)
-
 	return clusterctlConfig
 }
 
@@ -227,16 +232,21 @@ func setupBootstrapCluster(config *clusterctl.E2EConfig, scheme *runtime.Scheme,
 	var clusterProvider bootstrap.ClusterProvider
 	kubeconfigPath := ""
 	if !useExistingCluster {
+		By("Creating the bootstrap cluster")
 		clusterProvider = bootstrap.CreateKindBootstrapClusterAndLoadImages(ctx, bootstrap.CreateKindBootstrapClusterAndLoadImagesInput{
 			Name:               config.ManagementClusterName,
+			KubernetesVersion:  config.MustGetVariable(KubernetesVersionManagement),
 			RequiresDockerSock: config.HasDockerProvider(),
 			Images:             config.Images,
+			IPFamily:           config.MustGetVariable(IPFamily),
 			LogFolder:          filepath.Join(artifactFolder, "kind"),
 		})
 		Expect(clusterProvider).ToNot(BeNil(), "Failed to create a bootstrap cluster")
 
 		kubeconfigPath = clusterProvider.GetKubeconfigPath()
 		Expect(kubeconfigPath).To(BeAnExistingFile(), "Failed to get the kubeconfig file for the bootstrap cluster")
+	} else {
+		By("Using an existing bootstrap cluster")
 	}
 
 	clusterProxy := framework.NewClusterProxy("bootstrap", kubeconfigPath, scheme)
@@ -247,47 +257,41 @@ func setupBootstrapCluster(config *clusterctl.E2EConfig, scheme *runtime.Scheme,
 
 func initBootstrapCluster(bootstrapClusterProxy framework.ClusterProxy, config *clusterctl.E2EConfig, clusterctlConfig, artifactFolder string) {
 	clusterctl.InitManagementClusterAndWatchControllerLogs(watchesCtx, clusterctl.InitManagementClusterAndWatchControllerLogsInput{
-		ClusterProxy:            bootstrapClusterProxy,
-		ClusterctlConfigPath:    clusterctlConfig,
-		InfrastructureProviders: config.InfrastructureProviders(),
-		LogFolder:               filepath.Join(artifactFolder, "clusters", bootstrapClusterProxy.GetName()),
+		ClusterProxy:              bootstrapClusterProxy,
+		ClusterctlConfigPath:      clusterctlConfig,
+		InfrastructureProviders:   config.InfrastructureProviders(),
+		IPAMProviders:             config.IPAMProviders(),
+		RuntimeExtensionProviders: config.RuntimeExtensionProviders(),
+		AddonProviders:            config.AddonProviders(),
+		LogFolder:                 filepath.Join(artifactFolder, "clusters", bootstrapClusterProxy.GetName()),
 	}, config.GetIntervals(bootstrapClusterProxy.GetName(), "wait-controllers")...)
 }
 
-func tearDown(bootstrapClusterProvider bootstrap.ClusterProvider, bootstrapClusterProxy framework.ClusterProxy) {
-	cancelWatches()
-	if bootstrapClusterProxy != nil {
-		bootstrapClusterProxy.Dispose(context.TODO())
-	}
-	if bootstrapClusterProvider != nil {
-		bootstrapClusterProvider.Dispose(context.TODO())
-	}
-}
-
-func dumpBootstrapClusterLogs() error {
+func dumpBootstrapClusterLogs(bootstrapClusterProxy framework.ClusterProxy) {
 	if bootstrapClusterProxy == nil {
-		return nil
+		return
 	}
+
 	clusterLogCollector := bootstrapClusterProxy.GetLogCollector()
 	if clusterLogCollector == nil {
-		return nil
+		return
 	}
 
 	nodes, err := bootstrapClusterProxy.GetClientSet().CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get nodes for the bootstrap cluster: %w", err)
+		fmt.Printf("Failed to get nodes for the bootstrap cluster: %v\n", err)
+		return
 	}
 
 	for i := range nodes.Items {
 		nodeName := nodes.Items[i].GetName()
-		err := clusterLogCollector.CollectMachineLog(
+		err = clusterLogCollector.CollectMachineLog(
 			ctx,
 			bootstrapClusterProxy.GetClient(),
-			// The bootstrap cluster is not expected to be a CAPI cluster, so in order to reuse the logCollector,
+			// The bootstrap cluster is not expected to be a CAPI cluster, so in order to re-use the logCollector,
 			// we create a fake machine that wraps the node.
-			// NOTE: This assumes a naming convention between machine and nodes, which e.g. applies to the bootstrap
-			// clusters generated with kind. This might not work if you are using an existing bootstrap cluster
-			// provided by other means
+			// NOTE: This assumes a naming convention between machines and nodes, which e.g. applies to the bootstrap clusters generated with kind.
+			//       This might not work if you are using an existing bootstrap cluster provided by other means.
 			&clusterv1.Machine{
 				Spec:       clusterv1.MachineSpec{ClusterName: nodeName},
 				ObjectMeta: metav1.ObjectMeta{Name: nodeName},
@@ -295,8 +299,17 @@ func dumpBootstrapClusterLogs() error {
 			filepath.Join(artifactFolder, "clusters", bootstrapClusterProxy.GetName(), "machines", nodeName),
 		)
 		if err != nil {
-			return fmt.Errorf("failed to get logs for the bootstrap cluster node %s: %w", nodeName, err)
+			fmt.Printf("Failed to get logs for the bootstrap cluster node %s: %v\n", nodeName, err)
 		}
 	}
-	return nil
+}
+
+func tearDown(bootstrapClusterProvider bootstrap.ClusterProvider, bootstrapClusterProxy framework.ClusterProxy) {
+	cancelWatches()
+	if bootstrapClusterProxy != nil {
+		bootstrapClusterProxy.Dispose(ctx)
+	}
+	if bootstrapClusterProvider != nil {
+		bootstrapClusterProvider.Dispose(ctx)
+	}
 }
