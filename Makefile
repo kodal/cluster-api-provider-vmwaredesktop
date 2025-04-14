@@ -273,7 +273,7 @@ KUBETEST_CONF_PATH ?= $(abspath $(E2E_DATA_DIR)/kubetest/conformance.yaml)
 
 
 # Allow overriding the e2e configurations
-GINKGO_FOCUS ?= Workload cluster creation
+GINKGO_FOCUS ?= Single
 GINKGO_SKIP ?= Flatcar
 GINKGO_NODES ?= 1
 GINKGO_NOCOLOR ?= false
@@ -284,6 +284,8 @@ GINKGO_POLL_PROGRESS_INTERVAL ?= 1m
 ARTIFACTS ?= $(ROOT_DIR)/_artifacts
 SKIP_CLEANUP ?= false
 SKIP_CREATE_MGMT_CLUSTER ?= false
+VD_SSH_PRIVATE_KEY_PATH ?= $(ROOT_DIR)/test/e2e/data/ssh/id_ed25519
+export VD_SSH_PRIVATE_KEY_PATH
 
 # Install tools
 
