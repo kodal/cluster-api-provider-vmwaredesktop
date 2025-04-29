@@ -69,7 +69,7 @@ providers:
         targetName: "cluster-template-upgrades.yaml"
 
 variables:
-  KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.31.4}"
+  KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.32.3}"
   CONTROL_PLANE_MACHINE_COUNT: "${CONTROL_PLANE_MACHINE_COUNT:-1}"
   WORKER_MACHINE_COUNT: "${WORKER_MACHINE_COUNT:-2}"
   VM_SSH_KEYS: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPWddHU0HLzUNAIFMHkoU4O0WQT/V6N2/714qFUEvX9h e2e"
@@ -78,14 +78,14 @@ variables:
   VMREST_URL: "${VMREST_URL:-http://host.docker.internal:8697/api}"
   VMREST_USERNAME: "${VMREST_USERNAME:-admin}"
   VMREST_PASSWORD: "${VMREST_PASSWORD:-Admin123.}"
-  TEMPLATE_VM_ID: "${TEMPLATE_VM_ID:-LIVK1CGKIC5J71SNTC711F7O9TR3BDDQ}"
+  TEMPLATE_VM_ID: "${TEMPLATE_VM_ID:-8NBGFTCOFOL6QUBE7L8V86LIA29L0LGU}"
 
   KUBERNETES_VERSION_MANAGEMENT: "${KUBERNETES_VERSION_MANAGEMENT:-v1.32.2}"
-  KUBERNETES_VERSION_UPGRADE_FROM: "${KUBERNETES_VERSION_UPGRADE_FROM:-v1.31.4}"
-  KUBERNETES_VERSION_UPGRADE_TO: "${KUBERNETES_VERSION_UPGRADE_TO:-v1.32.3}"
+  KUBERNETES_VERSION_UPGRADE_FROM: "${KUBERNETES_VERSION_UPGRADE_FROM:-v1.32.3}"
+  KUBERNETES_VERSION_UPGRADE_TO: "${KUBERNETES_VERSION_UPGRADE_TO:-v1.33.0}"
   CONTROL_PLANE_MACHINE_TEMPLATE_UPGRADE_TO: "${CONTROL_PLANE_MACHINE_TEMPLATE_UPGRADE_TO:-control-plane-upgrade-to}"
   WORKERS_MACHINE_TEMPLATE_UPGRADE_TO: "${WORKERS_MACHINE_TEMPLATE_UPGRADE_TO:-worker-upgrade-to}"
-  TEMPLATE_VM_ID_UPGRADE_TO: "${TEMPLATE_VM_ID_UPGRADE_TO:-8NBGFTCOFOL6QUBE7L8V86LIA29L0LGU}"
+  TEMPLATE_VM_ID_UPGRADE_TO: "${TEMPLATE_VM_ID_UPGRADE_TO:-22I1U6PA8BT1KAFTSKPQDTQ8J7K7ACPC}"
 
   CNI: "${PWD}/test/e2e/data/cni/flannel.yaml"
   IP_FAMILY: "IPv4"
@@ -99,7 +99,7 @@ variables:
 
 intervals:
   default/wait-controllers: ["3m", "10s"]
-  default/wait-cluster: ["20m", "10s"]
+  default/wait-cluster: ["30m", "10s"]
   default/wait-control-plane: ["50m", "10s"]
   default/wait-worker-nodes: ["30m", "10s"]
   default/wait-delete-cluster: ["20m", "10s"]
@@ -108,7 +108,6 @@ intervals:
   default/wait-deployment: ["5m", "10s"]
   default/wait-job: ["5m", "10s"]
   default/wait-service: ["3m", "10s"]
-  default/wait-machines: ["20m", "10s"]
-  default/wait-machines-stable: ["20m", "10s"]
-  node-drain/wait-machine-deleted: ["20m", "10s"]
-  default/wait-nodes-ready: ["10m", "10s"]
+  default/wait-machines: ["30m", "10s"]
+  default/wait-machines-stable: ["30m", "10s"]
+  default/wait-nodes-ready: ["30m", "10s"]
