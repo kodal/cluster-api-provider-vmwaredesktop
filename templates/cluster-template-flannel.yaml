@@ -3,26 +3,29 @@ apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
   name: ${CLUSTER_NAME}
+  namespace: ${NAMESPACE}
   labels:
     cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
 spec:
   clusterNetwork:
     pods:
       cidrBlocks: ["10.244.0.0/16"]
-  paused: false
   controlPlaneRef:
     kind: KubeadmControlPlane
     apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     name: "${CLUSTER_NAME}-control-plane"
+    namespace: ${NAMESPACE}
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
     kind: VDCluster
     name: "${CLUSTER_NAME}"
+    namespace: ${NAMESPACE}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: VDCluster
 metadata:
-    name: "${CLUSTER_NAME}"
+  name: "${CLUSTER_NAME}"
+  namespace: ${NAMESPACE}
 spec:
   controlPlaneEndpoint:
     host: ${CONTROL_PLANE_ENDPOINT_IP}
@@ -32,6 +35,7 @@ apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: VDMachineTemplate
 metadata:
   name: "${CLUSTER_NAME}-control-plane"
+  namespace: ${NAMESPACE}
 spec:
   template:
     spec:
@@ -41,6 +45,7 @@ kind: KubeadmControlPlane
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 metadata:
   name: "${CLUSTER_NAME}-control-plane"
+  namespace: ${NAMESPACE}
 spec:
   version: "${KUBERNETES_VERSION}"
   replicas: ${CONTROL_PLANE_MACHINE_COUNT=1}
@@ -49,6 +54,7 @@ spec:
       kind: VDMachineTemplate
       apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
       name: "${CLUSTER_NAME}-control-plane"
+      namespace: ${NAMESPACE}
   kubeadmConfigSpec:
     initConfiguration:
       nodeRegistration:
@@ -62,7 +68,8 @@ spec:
           provider-id: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
     users:
       - name: root
-        sshAuthorizedKeys: [${VM_SSH_KEYS}]
+        sshAuthorizedKeys:
+          - ${VM_SSH_KEYS=" "}
 
     files:
       - content: |
@@ -124,7 +131,7 @@ spec:
       - path: /etc/kube-vip-prepare.sh
         content: |
           #!/bin/bash
-          
+
           # Copyright 2020 The Kubernetes Authors.
           #
           # Licensed under the Apache License, Version 2.0 (the "License");
@@ -138,30 +145,30 @@ spec:
           # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
           # See the License for the specific language governing permissions and
           # limitations under the License.
-          
+
           set -e
-          
+
           # Configure the workaround required for kubeadm init with kube-vip:
           # xref: https://github.com/kube-vip/kube-vip/issues/684
-          
+
           # Nothing to do for kubernetes < v1.29
           KUBEADM_MINOR="$(kubeadm version -o short | cut -d '.' -f 2)"
           if [[ "$KUBEADM_MINOR" -lt "29" ]]; then
             exit 0
           fi
-          
+
           IS_KUBEADM_INIT="false"
-          
+
           # cloud-init kubeadm init
           if [[ -f /run/kubeadm/kubeadm.yaml ]]; then
             IS_KUBEADM_INIT="true"
           fi
-          
+
           # ignition kubeadm init
           if [[ -f /etc/kubeadm.sh ]] && grep -q -e "kubeadm init" /etc/kubeadm.sh; then
             IS_KUBEADM_INIT="true"
           fi
-          
+
           if [[ "$IS_KUBEADM_INIT" == "true" ]]; then
             sed -i 's#path: /etc/kubernetes/admin.conf#path: /etc/kubernetes/super-admin.conf#' \
               /etc/kubernetes/manifests/kube-vip.yaml
@@ -170,36 +177,38 @@ spec:
         permissions: "0700"
     preKubeadmCommands:
       - /etc/kube-vip-prepare.sh
-
----
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
 metadata:
-  name: "${CLUSTER_NAME}-workers"
+  name: ${CLUSTER_NAME}-workers
+  namespace: ${NAMESPACE}
 spec:
-  clusterName: "${CLUSTER_NAME}"
+  clusterName: ${CLUSTER_NAME}
   replicas: ${WORKER_MACHINE_COUNT=0}
   selector:
     matchLabels:
   template:
     spec:
-      clusterName: "${CLUSTER_NAME}"
-      version: "${KUBERNETES_VERSION}"
+      clusterName: ${CLUSTER_NAME}
+      version: ${KUBERNETES_VERSION}
       bootstrap:
         configRef:
-          name: "${CLUSTER_NAME}-worker"
+          name: ${CLUSTER_NAME}-worker
+          namespace: ${NAMESPACE}
           apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
           kind: KubeadmConfigTemplate
       infrastructureRef:
         name: "${CLUSTER_NAME}-worker"
         apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
         kind: VDMachineTemplate
+        namespace: ${NAMESPACE}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: VDMachineTemplate
 metadata:
-  name: "${CLUSTER_NAME}-worker"
+  name: ${CLUSTER_NAME}-worker
+  namespace: ${NAMESPACE}
 spec:
   template:
     spec:
@@ -208,13 +217,15 @@ spec:
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: KubeadmConfigTemplate
 metadata:
-  name: "${CLUSTER_NAME}-worker"
+  name: ${CLUSTER_NAME}-worker
+  namespace: ${NAMESPACE}
 spec:
   template:
     spec:
       users:
         - name: root
-          sshAuthorizedKeys: [${VM_SSH_KEYS}]
+          sshAuthorizedKeys:
+            - ${VM_SSH_KEYS=" "}
       joinConfiguration:
         nodeRegistration:
           kubeletExtraArgs:
@@ -234,7 +245,6 @@ spec:
   resources:
     - kind: ConfigMap
       name: ${CLUSTER_NAME}-flannel
-  
 ---
 apiVersion: v1
 kind: ConfigMap
