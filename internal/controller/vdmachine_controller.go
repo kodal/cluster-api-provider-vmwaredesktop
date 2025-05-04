@@ -91,6 +91,18 @@ func (r *VDMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, nil
 	}
 
+	// Fetch the Cluster.
+	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
+	if err != nil {
+		logger.Info("Machine is missing cluster label or cluster does not exist")
+		return ctrl.Result{}, nil
+	}
+
+	if annotations.IsPaused(cluster, vdMachine) {
+		logger.Info("VDMachine or linked Cluster is marked as paused, not reconciling")
+		return ctrl.Result{}, nil
+	}
+
 	// patch from sigs.k8s.io/cluster-api/util/patch
 	helper, err := patch.NewHelper(vdMachine, r.Client)
 	if err != nil {
@@ -110,13 +122,6 @@ func (r *VDMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return r.reconcileDelete(ctx, vdMachine)
 	}
 
-	// Fetch the Cluster.
-	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
-	if err != nil {
-		logger.Info("Machine is missing cluster label or cluster does not exist")
-		return ctrl.Result{}, nil
-	}
-
 	vdCluster := &infrav1.VDCluster{}
 	vdClusterNamespacedName := client.ObjectKey{
 		Namespace: vdMachine.Namespace,
@@ -124,11 +129,6 @@ func (r *VDMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 	if err := r.Get(ctx, vdClusterNamespacedName, vdCluster); err != nil {
 		logger.Info("VDCluster is not available yet")
-		return ctrl.Result{}, nil
-	}
-
-	if annotations.IsPaused(cluster, vdMachine) {
-		logger.Info("VDMachine or linked Cluster is marked as paused, not reconciling")
 		return ctrl.Result{}, nil
 	}
 
