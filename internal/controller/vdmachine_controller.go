@@ -141,20 +141,10 @@ func (r *VDMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return r.reconcileDelete(ctx, vdMachine)
 	}
 
-	vdCluster := &infrav1.VDCluster{}
-	vdClusterNamespacedName := client.ObjectKey{
-		Namespace: vdMachine.Namespace,
-		Name:      cluster.Spec.InfrastructureRef.Name,
-	}
-	if err := r.Get(ctx, vdClusterNamespacedName, vdCluster); err != nil {
-		logger.Info("VDCluster is not available yet")
-		return ctrl.Result{}, nil
-	}
-
-	return r.reconcileNormal(ctx, cluster, vdCluster, machine, vdMachine)
+	return r.reconcileNormal(ctx, cluster, machine, vdMachine)
 }
 
-func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clusterv1.Cluster, vdCluster *infrav1.VDCluster, machine *clusterv1.Machine, vdMachine *infrav1.VDMachine) (ctrl.Result, error) {
+func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine, vdMachine *infrav1.VDMachine) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	// Add finalizer to the VDMachine.
