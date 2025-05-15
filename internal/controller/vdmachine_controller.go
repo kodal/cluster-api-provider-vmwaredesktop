@@ -21,8 +21,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
@@ -40,6 +38,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/patch"
 
+	"github.com/go-logr/logr"
 	"github.com/kodal/vmrest-go-client"
 
 	infrav1 "github.com/kodal/cluster-api-provider-vmwaredesktop/api/v1alpha1"
@@ -117,19 +116,29 @@ func (r *VDMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}()
 
+	vdClient, ctx := NewVDClient(ctx)
+	vmId := vdMachine.Spec.VmID
+	if vmId != nil {
+		powerState, response, err := vdClient.VMPowerManagementApi.GetPowerState(ctx, *vmId, nil)
+		if err != nil {
+			if response.StatusCode == 404 {
+				logger.Info("VM not found")
+				vdMachine.Spec.ProviderID = nil
+				vdMachine.Spec.VmID = nil
+				return ctrl.Result{}, nil
+			}
+			return ctrl.Result{}, err
+		}
+
+		vdMachine.Status.State = &powerState.PowerState
+		if err := helper.Patch(ctx, vdMachine); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	// Handle deleted machines
 	if !vdMachine.ObjectMeta.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, vdMachine)
-	}
-
-	vdCluster := &infrav1.VDCluster{}
-	vdClusterNamespacedName := client.ObjectKey{
-		Namespace: vdMachine.Namespace,
-		Name:      cluster.Spec.InfrastructureRef.Name,
-	}
-	if err := r.Get(ctx, vdClusterNamespacedName, vdCluster); err != nil {
-		logger.Info("VDCluster is not available yet")
-		return ctrl.Result{}, nil
 	}
 
 	return r.reconcileNormal(ctx, cluster, machine, vdMachine)
@@ -166,9 +175,10 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		}
 
 		logger.Info("Creating VM", "templateId", vdMachine.Spec.TemplateID)
-		vm, response, err := client.VMManagementApi.CreateVM(ctx, clone, nil)
+		vm, _, err := client.VMManagementApi.CreateVM(ctx, clone, nil)
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to create VM: %v, response: %s", err, GetResponseBody(response))
+			r.logErrorResponse(err, logger)
+			return ctrl.Result{}, fmt.Errorf("failed to create VM: %v", err)
 		}
 		providerID := fmt.Sprintf("vmwaredesktop://%s", vm.Id)
 		vdMachine.Spec.ProviderID = &providerID
@@ -249,10 +259,10 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 			Memory:     memory,
 		}
 
-		result, response, err := client.VMManagementApi.UpdateVM(ctx, vdParameter, *vmId, nil)
+		result, _, err := client.VMManagementApi.UpdateVM(ctx, vdParameter, *vmId, nil)
 		if err != nil {
-			responseBody := GetResponseBody(response)
-			return ctrl.Result{}, fmt.Errorf("failed to update VM hardware: %v, response: %s", err, responseBody)
+			r.logErrorResponse(err, logger)
+			return ctrl.Result{}, fmt.Errorf("failed to update VM hardware: %v", err)
 		}
 		logger.Info("VM hardware updated", "result", result)
 		hardware := infrav1.VDHardware{
@@ -260,26 +270,6 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 			Memory: result.Memory,
 		}
 		vdMachine.Status.Hardware = hardware
-		return ctrl.Result{}, nil
-	}
-
-	vmState := vdMachine.Status.State
-	if vmState == nil || *vmState == "poweringOn" {
-		message := "Getting power state of VM"
-
-		logger.Info(message)
-
-		powerState, response, err := client.VMPowerManagementApi.GetPowerState(ctx, *vmId, nil)
-		if err != nil {
-			if response.StatusCode == 404 {
-				logger.Info("VM not found")
-				vdMachine.Spec.ProviderID = nil
-				return ctrl.Result{}, nil
-			}
-			return ctrl.Result{}, err
-		}
-
-		vdMachine.Status.State = &powerState.PowerState
 		return ctrl.Result{}, nil
 	}
 
@@ -295,7 +285,8 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 				vdMachine.Spec.ProviderID = nil
 				return ctrl.Result{}, nil
 			}
-			return ctrl.Result{}, fmt.Errorf("failed to power on VM: %v, response: %s", err, GetResponseBody(response))
+			r.logErrorResponse(err, logger)
+			return ctrl.Result{}, fmt.Errorf("failed to power on VM: %v", err)
 		}
 
 		vdMachine.Status.State = &powerState.PowerState
@@ -326,21 +317,18 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		// Set Ready to true.
 		vdMachine.Status.Ready = true
 		vdMachine.Status.Initialization.Provisioned = true
+		logger.Info("VDMachine is ready")
 		return ctrl.Result{}, nil
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func GetResponseBody(response *http.Response) string {
-	if response == nil || response.Body == nil {
-		return ""
+func (r *VDMachineReconciler) logErrorResponse(err error, logger logr.Logger) {
+	if swaggerErr, ok := err.(vmrest.GenericSwaggerError); ok {
+		logger.Info("Response error", "errorModel", swaggerErr.Model())
 	}
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return ""
-	}
-	return string(body)
+
 }
 
 func (r *VDMachineReconciler) reconcileDelete(ctx context.Context, vdMachine *infrav1.VDMachine) (_ ctrl.Result, rerr error) { // nolint:unparam
