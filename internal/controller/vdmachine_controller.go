@@ -137,7 +137,7 @@ func (r *VDMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Handle deleted machines
-	if !vdMachine.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !vdMachine.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, vdMachine)
 	}
 
@@ -197,7 +197,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 
 		logger.Info("Configuring VM")
 
-		bootstrapData, err := GetSecretData(ctx, r.Client, vdMachine.ObjectMeta.Namespace, *machine.Spec.Bootstrap.DataSecretName)
+		bootstrapData, err := GetSecretData(ctx, r.Client, vdMachine.Namespace, *machine.Spec.Bootstrap.DataSecretName)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -270,6 +270,43 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 			Memory: result.Memory,
 		}
 		vdMachine.Status.Hardware = hardware
+		return ctrl.Result{}, nil
+	}
+
+	if len(vdMachine.Spec.SharedFolders) != len(vdMachine.Status.SharedFolders) {
+		logger.Info("Sharing folders")
+		for _, sharedFolder := range vdMachine.Spec.SharedFolders {
+
+			flags := int32(4)
+			if sharedFolder.Flags != nil {
+				flags = *sharedFolder.Flags
+			}
+			params := vmrest.SharedFolder{
+				FolderId: sharedFolder.FolderId,
+				HostPath: sharedFolder.HostPath,
+				Flags:    flags,
+			}
+			_, _, err := client.VMSharedFoldersManagementApi.CreateSharedFolder(ctx, params, *vmId, nil)
+			if err != nil {
+				r.logErrorResponse(err, logger)
+				return ctrl.Result{}, fmt.Errorf("failed to create VM shared folder: %v", err)
+			}
+		}
+
+		resultSharedFolders, _, err := client.VMSharedFoldersManagementApi.GetAllSharedFolders(ctx, *vmId, nil)
+		if err != nil {
+			r.logErrorResponse(err, logger)
+			return ctrl.Result{}, fmt.Errorf("failed to get VM shared folders: %v", err)
+		}
+		statusSharedFolders := []infrav1.VDSharedFolder{}
+		for _, sharedFolder := range resultSharedFolders {
+			statusSharedFolders = append(statusSharedFolders, infrav1.VDSharedFolder{
+				FolderId: sharedFolder.FolderId,
+				HostPath: sharedFolder.HostPath,
+				Flags:    &sharedFolder.Flags,
+			})
+		}
+		vdMachine.Status.SharedFolders = statusSharedFolders
 		return ctrl.Result{}, nil
 	}
 
