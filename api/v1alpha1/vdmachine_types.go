@@ -59,6 +59,10 @@ type VDMachineSpec struct {
 	// Cloud Init network_config
 	// +optional
 	NetworkConfig *string `json:"networkConfig,omitempty"`
+
+	// Shared folders required to enable at VMWare Fusion or VMWare Desktop
+	// +optional
+	SharedFolders []VDSharedFolder `json:"sharedFolders,omitempty"`
 }
 
 // InitializationStatus represents the initialization state of the resource.
@@ -98,6 +102,10 @@ type VDMachineStatus struct {
 	// VM power state.
 	// +optional
 	State *string `json:"state,omitempty"`
+
+	// Shared folders
+	// +optional
+	SharedFolders []VDSharedFolder `json:"sharedFolders,omitempty"`
 }
 
 type VDHardware struct {
@@ -107,6 +115,16 @@ type VDHardware struct {
 	// Memory is the amount of memory for the VM.
 	// +optional
 	Memory int32 `json:"memory,omitempty"`
+}
+
+type VDSharedFolder struct {
+	// Folder in /mnt/hgfs/{folder_id}
+	FolderId string `json:"folderId"`
+	// Host path
+	HostPath string `json:"hostPath"`
+	// Unknown flags default 4
+	// +optional
+	Flags *int32 `json:"flags,omitempty"`
 }
 
 // +kubebuilder:object:root=true

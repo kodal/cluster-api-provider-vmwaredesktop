@@ -84,6 +84,26 @@ spec:
                       providerID:
                         description: vmwaredesktop://VmID
                         type: string
+                      sharedFolders:
+                        description: Shared folders required to enable at VMWare Fusion
+                          or VMWare Desktop
+                        items:
+                          properties:
+                            flags:
+                              description: Unknown flags default 4
+                              format: int32
+                              type: integer
+                            folderId:
+                              description: Folder in /mnt/hgfs/{folder_id}
+                              type: string
+                            hostPath:
+                              description: Host path
+                              type: string
+                          required:
+                          - folderId
+                          - hostPath
+                          type: object
+                        type: array
                       templateID:
                         description: ID of the template VM to clone.
                         type: string

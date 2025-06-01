@@ -168,10 +168,28 @@ spec:
           fi
         owner: root:root
         permissions: "0700"
+      - path: /etc/systemd/system/mnt-hgfs.mount
+        content: |
+          [Unit]
+          Description=VMware mount for hgfs
+          DefaultDependencies=no
+          Before=umount.target
+          ConditionVirtualization=vmware
+          After=sys-fs-fuse-connections.mount
+
+          [Mount]
+          What=vmhgfs-fuse
+          Where=/mnt/hgfs
+          Type=fuse
+          Options=default_permissions,allow_other
+
+          [Install]
+          WantedBy=multi-user.target
+      - path: /etc/modules-load.d/open-vm-tools.conf
+        content: fuse
     preKubeadmCommands:
       - /etc/kube-vip-prepare.sh
-
----
+      - systemctl enable --now mnt-hgfs.mount
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment

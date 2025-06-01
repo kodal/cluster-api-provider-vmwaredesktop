@@ -273,6 +273,43 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		return ctrl.Result{}, nil
 	}
 
+	if len(vdMachine.Spec.SharedFolders) != len(vdMachine.Status.SharedFolders) {
+		logger.Info("Sharing folders")
+		for _, sharedFolder := range vdMachine.Spec.SharedFolders {
+
+			flags := int32(4)
+			if sharedFolder.Flags != nil {
+				flags = *sharedFolder.Flags
+			}
+			params := vmrest.SharedFolder{
+				FolderId: sharedFolder.FolderId,
+				HostPath: sharedFolder.HostPath,
+				Flags:    flags,
+			}
+			_, _, err := client.VMSharedFoldersManagementApi.CreateSharedFolder(ctx, params, *vmId, nil)
+			if err != nil {
+				r.logErrorResponse(err, logger)
+				return ctrl.Result{}, fmt.Errorf("failed to create VM shared folder: %v", err)
+			}
+		}
+
+		resultSharedFolders, _, err := client.VMSharedFoldersManagementApi.GetAllSharedFolders(ctx, *vmId, nil)
+		if err != nil {
+			r.logErrorResponse(err, logger)
+			return ctrl.Result{}, fmt.Errorf("failed to get VM shared folders: %v", err)
+		}
+		statusSharedFolders := []infrav1.VDSharedFolder{}
+		for _, sharedFolder := range resultSharedFolders {
+			statusSharedFolders = append(statusSharedFolders, infrav1.VDSharedFolder{
+				FolderId: sharedFolder.FolderId,
+				HostPath: sharedFolder.HostPath,
+				Flags:    &sharedFolder.Flags,
+			})
+		}
+		vdMachine.Status.SharedFolders = statusSharedFolders
+		return ctrl.Result{}, nil
+	}
+
 	if *vdMachine.Status.State == "poweredOff" {
 		message := "Powering on"
 
