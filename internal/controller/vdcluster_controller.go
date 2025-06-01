@@ -62,7 +62,7 @@ func (r *VDClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	logger := log.FromContext(ctx)
 
 	vdCluster := &infrav1.VDCluster{}
-	if err := r.Client.Get(ctx, req.NamespacedName, vdCluster); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, vdCluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}

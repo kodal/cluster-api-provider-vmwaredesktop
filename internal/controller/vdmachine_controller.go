@@ -137,7 +137,7 @@ func (r *VDMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Handle deleted machines
-	if !vdMachine.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !vdMachine.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, vdMachine)
 	}
 
@@ -197,7 +197,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 
 		logger.Info("Configuring VM")
 
-		bootstrapData, err := GetSecretData(ctx, r.Client, vdMachine.ObjectMeta.Namespace, *machine.Spec.Bootstrap.DataSecretName)
+		bootstrapData, err := GetSecretData(ctx, r.Client, vdMachine.Namespace, *machine.Spec.Bootstrap.DataSecretName)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
