@@ -39,3 +39,6 @@ test/e2e/config/*-envsubst.yaml
 
 # release
 out/
+
+# talos
+_talos/
