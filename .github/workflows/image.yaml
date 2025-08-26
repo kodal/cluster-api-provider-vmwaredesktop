@@ -24,14 +24,15 @@ jobs:
       - uses: actions/checkout@v4.1.1
 
       - name: Generate lowercase repository name
+        id: repo
         run: |
-          echo "REPO=${GITHUB_REPOSITORY,,}" >> "${GITHUB_ENV}"
+          echo "REPO=${GITHUB_REPOSITORY,,}" >> "${GITHUB_OUTPUT}"
 
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ env.REPO }}
+          images: ghcr.io/${{ steps.repo.outputs.REPO }}
 
       - name: Login to GitHub Container Registry
         if: github.event_name != 'pull_request'
