@@ -260,6 +260,25 @@ tilt-up: ## Start Tilt in a kind cluster.
 clean-tilt: ## Clean up Tilt in a kind cluster.
 	cd ../cluster-api && $(MAKE) clean-tilt
 
+##@ Talos
+
+TALOS_VERSION ?= v1.11.0-rc.0
+
+.PHONY: talos-imager
+talos-imager: ## Build the Talos imager tool
+	env TALOS_VERSION=$(TALOS_VERSION) envsubst < talos/imager.yaml | docker run --rm -i \
+    -v $(PWD)/_talos/imager/$(TALOS_VERSION):/out \
+    ghcr.io/siderolabs/imager:$(TALOS_VERSION) -
+
+.PHONY: talos-factory
+talos-factory:
+	@ID=$$(curl -skLX POST --data-binary @talos/factory.yaml https://factory.talos.dev/schematics | jq -r '.id'); \
+	echo $$ID:$(TALOS_VERSION); \
+	URL=https://factory.talos.dev/image/$$ID/$(TALOS_VERSION)/nocloud-arm64.iso; \
+	echo $$URL; \
+	mkdir -p $(PWD)/_talos/factory/$(TALOS_VERSION); \
+	curl -kL $$URL -o $(PWD)/_talos/factory/$(TALOS_VERSION)/nocloud-arm64.iso
+
 ##@ e2e
 ## --------------------------------------
 ## E2e tests

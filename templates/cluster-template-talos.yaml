@@ -32,7 +32,7 @@ metadata:
 spec:
   template:
     spec:
-      templateID: ${TEMPLATE_VM_ID}
+      templateID: ${TALOS_VM_ID}
       networkConfig: |
         network:
           version: 2
@@ -56,12 +56,10 @@ spec:
         - |
           machine:
             install:
-              image: factory.talos.dev/installer/e73124861dff640345aee009e7f5e6bc20bf540eadc3166d21de1758e695844e:v1.9.5
+              image: factory.talos.dev/installer/e73124861dff640345aee009e7f5e6bc20bf540eadc3166d21de1758e695844e:v1.11.0-rc.0
               disk: /dev/sda
               extraKernelArgs:
                 - net.ifnames=0
-              extensions:
-                - image: ghcr.io/siderolabs/talos-vmtoolsd:v1.0.0
             network: 
               interfaces:
                 - interface: eth0
@@ -72,7 +70,7 @@ spec:
               extraArgs:
                 provider-id: "{ provider_id }"
           cluster:
-              allowSchedulingOnControlPlanes: ${CONTROL_PLANE_ALLOW_SCHEDULING=true}
+            allowSchedulingOnControlPlanes: ${CONTROL_PLANE_ALLOW_SCHEDULING=true}
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
@@ -106,7 +104,7 @@ metadata:
 spec:
   template:
     spec:
-      templateID: ${TEMPLATE_VM_ID}
+      templateID: ${TALOS_VM_ID}
       networkConfig: |
         network:
           version: 2
@@ -124,12 +122,10 @@ spec:
         - |
           machine:
             install:
-              image: factory.talos.dev/installer/e73124861dff640345aee009e7f5e6bc20bf540eadc3166d21de1758e695844e:v1.9.5
+              image: factory.talos.dev/installer/e73124861dff640345aee009e7f5e6bc20bf540eadc3166d21de1758e695844e:v1.11.0-rc.0
               disk: /dev/sda
               extraKernelArgs:
                 - net.ifnames=0
-              extensions:
-                - image: ghcr.io/siderolabs/talos-vmtoolsd:v1.0.0
             network: 
               interfaces:
                 - interface: eth0
