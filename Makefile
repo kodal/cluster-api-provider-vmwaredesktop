@@ -262,11 +262,12 @@ clean-tilt: ## Clean up Tilt in a kind cluster.
 
 ##@ Talos
 
-TALOS_VERSION ?= v1.11.0-rc.0
+TALOS_VERSION ?= v1.11.0
 
 .PHONY: talos-imager
 talos-imager: ## Build the Talos imager tool
-	env TALOS_VERSION=$(TALOS_VERSION) envsubst < talos/imager.yaml | docker run --rm -i \
+	env TALOS_VERSION=$(TALOS_VERSION) envsubst < talos/imager.yaml | docker run --rm -i --privileged \
+	-v /dev:/dev \
     -v $(PWD)/_talos/imager/$(TALOS_VERSION):/out \
     ghcr.io/siderolabs/imager:$(TALOS_VERSION) -
 
@@ -278,6 +279,14 @@ talos-factory:
 	echo $$URL; \
 	mkdir -p $(PWD)/_talos/factory/$(TALOS_VERSION); \
 	curl -kL $$URL -o $(PWD)/_talos/factory/$(TALOS_VERSION)/nocloud-arm64.iso
+
+.PHONY: talos-push-vmtoolsd
+talos-push-vmtoolsd:
+	cd ../talos-extensions && $(MAKE) PUSH=true REGISTRY=ghcr.io USERNAME=kodal vmtoolsd-guest-agent
+
+.PHONY: talos-push-installer
+talos-push-installer:
+	crane push _talos/imager/$(TALOS_VERSION)/installer-arm64.tar ghcr.io/kodal/talos-installer:$(TALOS_VERSION)
 
 ##@ e2e
 ## --------------------------------------

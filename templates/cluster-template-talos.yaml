@@ -56,13 +56,11 @@ spec:
         - |
           machine:
             install:
-              image: factory.talos.dev/installer/e73124861dff640345aee009e7f5e6bc20bf540eadc3166d21de1758e695844e:v1.11.0-rc.0
+              image: ghcr.io/kodal/talos-installer:v1.11.0
               disk: /dev/sda
-              extraKernelArgs:
-                - net.ifnames=0
             network: 
               interfaces:
-                - interface: eth0
+                - interface: ens192
                   dhcp: true
                   vip:
                     ip: ${CONTROL_PLANE_ENDPOINT_IP}
@@ -79,7 +77,7 @@ metadata:
   namespace: ${NAMESPACE}
 spec:
   clusterName: ${CLUSTER_NAME}
-  replicas: ${WORKER_MACHINE_COUNT=1}
+  replicas: ${WORKER_MACHINE_COUNT=0}
   template:
     spec:
       clusterName: ${CLUSTER_NAME}
@@ -122,13 +120,11 @@ spec:
         - |
           machine:
             install:
-              image: factory.talos.dev/installer/e73124861dff640345aee009e7f5e6bc20bf540eadc3166d21de1758e695844e:v1.11.0-rc.0
+              image: ghcr.io/kodal/talos-installer:v1.11.0
               disk: /dev/sda
-              extraKernelArgs:
-                - net.ifnames=0
             network: 
               interfaces:
-                - interface: eth0
+                - interface: ens192
                   dhcp: true
             kubelet:
               extraArgs:
