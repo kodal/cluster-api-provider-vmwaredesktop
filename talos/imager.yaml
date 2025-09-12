@@ -1,15 +1,15 @@
 arch: arm64
-platform: nocloud
+platform: vmware
 secureboot: false
 version: ${TALOS_VERSION}
 customization:
   extraKernelArgs:
-    - net.ifnames=0
+    - talos.config=guestinfo
 input:
   baseInstaller:
     imageRef: ghcr.io/siderolabs/installer:${TALOS_VERSION}
   systemExtensions:
-    - imageRef: ghcr.io/siderolabs/talos-vmtoolsd:v1.2.0
+    - imageRef: ghcr.io/kodal/vmtoolsd-guest-agent:v1.3.0
 output:
-  kind: iso
+  kind: installer
   outFormat: raw
