@@ -40,6 +40,9 @@ spec:
   template:
     spec:
       templateID: ${TEMPLATE_VM_ID}
+      network:
+        vmnet: vmnet2
+        type: custom
 ---
 kind: KubeadmControlPlane
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1

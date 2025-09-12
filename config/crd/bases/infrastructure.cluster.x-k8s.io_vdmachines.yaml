@@ -49,6 +49,13 @@ spec:
                 format: int32
                 multipleOf: 8
                 type: integer
+              network:
+                properties:
+                  type:
+                    type: string
+                  vmnet:
+                    type: string
+                type: object
               networkConfig:
                 description: Cloud Init network_config
                 type: string
@@ -195,6 +202,20 @@ spec:
                       been provisioned.
                     type: boolean
                 type: object
+              networkAdapters:
+                items:
+                  properties:
+                    index:
+                      format: int32
+                      type: integer
+                    macAddress:
+                      type: string
+                    type:
+                      type: string
+                    vmnet:
+                      type: string
+                  type: object
+                type: array
               ready:
                 type: boolean
               sharedFolders:

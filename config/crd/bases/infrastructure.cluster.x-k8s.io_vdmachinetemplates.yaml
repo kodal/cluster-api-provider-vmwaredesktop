@@ -78,6 +78,13 @@ spec:
                         format: int32
                         multipleOf: 8
                         type: integer
+                      network:
+                        properties:
+                          type:
+                            type: string
+                          vmnet:
+                            type: string
+                        type: object
                       networkConfig:
                         description: Cloud Init network_config
                         type: string

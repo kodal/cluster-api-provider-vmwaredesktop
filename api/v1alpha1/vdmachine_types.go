@@ -60,6 +60,9 @@ type VDMachineSpec struct {
 	// +optional
 	NetworkConfig *string `json:"networkConfig,omitempty"`
 
+	// +optional
+	Network *VDNetwork `json:"network,omitempty"`
+
 	// Shared folders required to enable at VMWare Fusion or VMWare Desktop
 	// +optional
 	SharedFolders []VDSharedFolder `json:"sharedFolders,omitempty"`
@@ -103,6 +106,9 @@ type VDMachineStatus struct {
 	// +optional
 	State *string `json:"state,omitempty"`
 
+	// +optional
+	NetworkAdapters []VDNetworkAdapter `json:"networkAdapters,omitempty"`
+
 	// Shared folders
 	// +optional
 	SharedFolders []VDSharedFolder `json:"sharedFolders,omitempty"`
@@ -125,6 +131,18 @@ type VDSharedFolder struct {
 	// Unknown flags default 4
 	// +optional
 	Flags *int32 `json:"flags,omitempty"`
+}
+
+type VDNetwork struct {
+	Type  *string `json:"type,omitempty"`
+	Vmnet *string `json:"vmnet,omitempty"`
+}
+
+type VDNetworkAdapter struct {
+	Index      *int32  `json:"index,omitempty"`
+	Type       *string `json:"type,omitempty"`
+	Vmnet      *string `json:"vmnet,omitempty"`
+	MacAddress *string `json:"macAddress,omitempty"`
 }
 
 // +kubebuilder:object:root=true
