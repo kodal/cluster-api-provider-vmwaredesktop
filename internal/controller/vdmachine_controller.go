@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -273,6 +274,10 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		return ctrl.Result{}, nil
 	}
 
+	if res, err := r.reconcileNetworkAdapters(ctx, client, vmId, vdMachine, logger); err != nil || !res.IsZero() {
+		return res, err
+	}
+
 	if res, err := r.reconcileSharedFolders(ctx, client, vmId, vdMachine, logger); err != nil || !res.IsZero() {
 		return res, err
 	}
@@ -325,7 +330,73 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		return ctrl.Result{}, nil
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+}
+
+func (r *VDMachineReconciler) reconcileNetworkAdapters(
+	ctx context.Context,
+	client *vmrest.APIClient,
+	vmId *string,
+	vdMachine *infrav1.VDMachine,
+	logger logr.Logger,
+) (ctrl.Result, error) {
+
+	if len(vdMachine.Status.NetworkAdapters) != 0 {
+		return ctrl.Result{}, nil
+	}
+
+	logger.Info("reconcile network adapters")
+
+	resultNetworkAdapters, _, err := client.VMNetworkAdaptersManagementApi.GetAllNICDevices(ctx, *vmId, nil)
+	if err != nil {
+		r.logErrorResponse(err, logger)
+		return ctrl.Result{}, fmt.Errorf("failed to get VM network adapters: %v", err)
+	}
+
+	statusNetworkAdapters := []infrav1.VDNetworkAdapter{}
+	for _, networkAdapter := range resultNetworkAdapters.Nics {
+		statusNetworkAdapters = append(statusNetworkAdapters, infrav1.VDNetworkAdapter{
+			Index:      &networkAdapter.Index,
+			Type:       &networkAdapter.Type_,
+			Vmnet:      &networkAdapter.Vmnet,
+			MacAddress: &networkAdapter.MacAddress,
+		})
+	}
+
+	vdMachine.Status.NetworkAdapters = statusNetworkAdapters
+
+	if vdMachine.Spec.Network == nil {
+		return ctrl.Result{}, nil
+	}
+
+	vmNet := vdMachine.Spec.Network.Vmnet
+
+	if slices.ContainsFunc(statusNetworkAdapters, func(a infrav1.VDNetworkAdapter) bool {
+		return a.Vmnet != nil && vmNet != nil && *a.Vmnet == *vmNet
+	}) {
+		return ctrl.Result{}, nil
+	}
+
+	params := vmrest.NicDeviceParameter{
+		Type_: *vdMachine.Spec.Network.Type,
+		Vmnet: *vmNet,
+	}
+	networkAdapter, _, err := client.VMNetworkAdaptersManagementApi.CreateNICDevice(ctx, params, *vmId, nil)
+	if err != nil {
+		r.logErrorResponse(err, logger)
+		return ctrl.Result{}, fmt.Errorf("failed to create network adapter: %v", err)
+	}
+
+	statusNetworkAdapters = append(statusNetworkAdapters, infrav1.VDNetworkAdapter{
+		Index:      &networkAdapter.Index,
+		Type:       &networkAdapter.Type_,
+		Vmnet:      &networkAdapter.Vmnet,
+		MacAddress: &networkAdapter.MacAddress,
+	})
+
+	vdMachine.Status.NetworkAdapters = statusNetworkAdapters
+
+	return ctrl.Result{RequeueAfter: time.Millisecond}, nil
 }
 
 func (r *VDMachineReconciler) reconcileSharedFolders(
