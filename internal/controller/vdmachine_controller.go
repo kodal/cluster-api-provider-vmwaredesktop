@@ -17,16 +17,21 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"html/template"
 	"slices"
 	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -51,9 +56,34 @@ type VDMachineReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+type Metadata struct {
+	InstanceId *string
+	Hostname   *string
+	Ethernets  []Ethernet
+	NtpServers []string
+}
+
+type Ethernet struct {
+	Name        *string
+	Dhcp4       *bool
+	Dhcp6       *bool
+	Gateway4    *string
+	Gateway6    *string
+	Addresses   []string
+	Nameservers []string
+	Routes      []Route
+}
+
+type Route struct {
+	To  string
+	Via string
+}
+
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=vdmachines,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=vdmachines/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=vdmachines/finalizers,verbs=update
+// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddressclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddresses,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;machines,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch;create;update;patch
@@ -194,51 +224,6 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		return ctrl.Result{}, nil
 	}
 
-	if !vdMachine.Status.Initialization.BootstrapDataProvided {
-
-		logger.Info("Configuring VM")
-
-		bootstrapData, err := GetSecretData(ctx, r.Client, vdMachine.Namespace, *machine.Spec.Bootstrap.DataSecretName)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		logger.Info("Bootstrap data", "data", bootstrapData)
-
-		bootstrapData = strings.ReplaceAll(bootstrapData, "{ provider_id }", *vdMachine.Spec.ProviderID)
-
-		// Set guestinfo parameters using a map
-		encodedBootstrapData := base64.StdEncoding.EncodeToString([]byte(bootstrapData))
-		networkConfig := ""
-		if vdMachine.Spec.NetworkConfig != nil {
-			networkConfig = *vdMachine.Spec.NetworkConfig
-		}
-		metadata := fmt.Sprintf("instance-id: %s\nlocal-hostname: %s\n%s", *vmId, vdMachine.Name, networkConfig)
-		encodedMetadata := base64.StdEncoding.EncodeToString([]byte(metadata))
-
-		params := map[string]string{
-			"guestinfo.userdata":          encodedBootstrapData,
-			"guestinfo.userdata.encoding": "base64",
-			"guestinfo.metadata":          encodedMetadata,
-			"guestinfo.metadata.encoding": "base64",
-		}
-
-		for name, value := range params {
-			configParam := vmrest.ConfigVmParamsParameter{
-				Name:  name,
-				Value: value,
-			}
-			_, _, err := client.VMManagementApi.ConfigVMParams(ctx, configParam, *vmId, nil)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-
-		vdMachine.Status.Initialization.BootstrapDataProvided = true
-		logger.Info("VM configured with guestinfo parameters")
-		return ctrl.Result{}, nil
-	}
-
 	cpuConfigured := vdMachine.Spec.Cpu == nil || *vdMachine.Spec.Cpu == vdMachine.Status.Hardware.Cpu
 	memoryConfigured := vdMachine.Spec.Memory == nil || *vdMachine.Spec.Memory == vdMachine.Status.Hardware.Memory
 
@@ -278,8 +263,100 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		return res, err
 	}
 
+	if res, err := r.reconcileNetworkAddresses(ctx, vdMachine, logger); err != nil || !res.IsZero() {
+		return res, err
+	}
 	if res, err := r.reconcileSharedFolders(ctx, client, vmId, vdMachine, logger); err != nil || !res.IsZero() {
 		return res, err
+	}
+
+	if !vdMachine.Status.Initialization.BootstrapDataProvided {
+
+		logger.Info("Configuring VM")
+
+		bootstrapData, err := GetSecretData(ctx, r.Client, vdMachine.Namespace, *machine.Spec.Bootstrap.DataSecretName)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		logger.Info("Bootstrap data", "data", bootstrapData)
+
+		bootstrapData = strings.ReplaceAll(bootstrapData, "{ provider_id }", *vdMachine.Spec.ProviderID)
+		encodedBootstrapData := base64.StdEncoding.EncodeToString([]byte(bootstrapData))
+
+		var ethernets []Ethernet
+		var ntpServers []string
+
+		for _, vdNetworkEthernet := range vdMachine.Spec.Network.Ethernets {
+
+			ipamAddress, err := r.findIpamAddress(ctx, vdMachine, &vdNetworkEthernet)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			var addresses, nameservers []string
+			var routes []Route
+			if ipamAddress != nil && ipamAddress.Spec.Address != "" {
+				addresses = append(addresses, fmt.Sprintf("%s/%d", ipamAddress.Spec.Address, ipamAddress.Spec.Prefix))
+				if ipamAddress.Spec.Gateway != "" {
+					gateway := ipamAddress.Spec.Gateway
+					nameservers = append(nameservers, gateway)
+					ntpServers = append(ntpServers, "time.google.com")
+					routes = append(routes, Route{
+						To:  "0.0.0.0/0",
+						Via: gateway,
+					})
+				}
+			}
+			ethernets = append(ethernets, Ethernet{
+				Name:        &vdNetworkEthernet.Name,
+				Dhcp4:       vdNetworkEthernet.Dhcp4,
+				Dhcp6:       vdNetworkEthernet.Dhcp6,
+				Addresses:   addresses,
+				Nameservers: nameservers,
+				Routes:      routes,
+			})
+		}
+
+		metadata := Metadata{
+			InstanceId: vmId,
+			Hostname:   &vdMachine.Name,
+			Ethernets:  ethernets,
+			NtpServers: ntpServers,
+		}
+		metadataTemplater, err := template.New("metadata").Parse(metadataTemplate)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		buffer := &bytes.Buffer{}
+		if err = metadataTemplater.Execute(buffer, metadata); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to render %s", err)
+		}
+		metadataString := buffer.String()
+
+		encodedMetadata := base64.StdEncoding.EncodeToString([]byte(metadataString))
+		logger.Info("metadata", "metadata", metadataString)
+
+		params := map[string]string{
+			"guestinfo.userdata":          encodedBootstrapData,
+			"guestinfo.userdata.encoding": "base64",
+			"guestinfo.metadata":          encodedMetadata,
+			"guestinfo.metadata.encoding": "base64",
+		}
+
+		for name, value := range params {
+			configParam := vmrest.ConfigVmParamsParameter{
+				Name:  name,
+				Value: value,
+			}
+			_, _, err := client.VMManagementApi.ConfigVMParams(ctx, configParam, *vmId, nil)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+
+		vdMachine.Status.Initialization.BootstrapDataProvided = true
+		logger.Info("VM configured with guestinfo parameters")
+		return ctrl.Result{}, nil
 	}
 
 	if *vdMachine.Status.State == "poweredOff" {
@@ -303,9 +380,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 	}
 
 	if len(vdMachine.Status.Addresses) == 0 {
-		message := "Getting IP address"
-
-		logger.Info(message)
+		logger.Info("Getting IP address")
 
 		ip, response, err := client.VMNetworkAdaptersManagementApi.GetIPAddress(ctx, *vmId, nil)
 		if err != nil {
@@ -341,8 +416,25 @@ func (r *VDMachineReconciler) reconcileNetworkAdapters(
 	logger logr.Logger,
 ) (ctrl.Result, error) {
 
-	if len(vdMachine.Status.NetworkAdapters) != 0 {
+	hasNetwork := vdMachine.Spec.Network != nil
+	hasAdapters := hasNetwork && vdMachine.Spec.Network.Adapters != nil
+
+	if !hasAdapters && vdMachine.Status.NetworkAdapters != nil {
 		return ctrl.Result{}, nil
+	}
+
+	if hasAdapters {
+		containsAll := true
+		for _, adapter := range vdMachine.Spec.Network.Adapters {
+			if !contains(vdMachine.Status.NetworkAdapters, adapter) {
+				containsAll = false
+				break
+			}
+		}
+
+		if containsAll {
+			return ctrl.Result{}, nil
+		}
 	}
 
 	logger.Info("reconcile network adapters")
@@ -356,47 +448,121 @@ func (r *VDMachineReconciler) reconcileNetworkAdapters(
 	statusNetworkAdapters := []infrav1.VDNetworkAdapter{}
 	for _, networkAdapter := range resultNetworkAdapters.Nics {
 		statusNetworkAdapters = append(statusNetworkAdapters, infrav1.VDNetworkAdapter{
-			Index:      &networkAdapter.Index,
-			Type:       &networkAdapter.Type_,
-			Vmnet:      &networkAdapter.Vmnet,
-			MacAddress: &networkAdapter.MacAddress,
+			Type:  &networkAdapter.Type_,
+			Vmnet: &networkAdapter.Vmnet,
 		})
 	}
 
 	vdMachine.Status.NetworkAdapters = statusNetworkAdapters
 
-	if vdMachine.Spec.Network == nil {
+	if !hasAdapters {
 		return ctrl.Result{}, nil
 	}
 
-	vmNet := vdMachine.Spec.Network.Vmnet
+	for _, adapter := range vdMachine.Spec.Network.Adapters {
+		if !contains(vdMachine.Status.NetworkAdapters, adapter) {
+			nicParams := vmrest.NicDeviceParameter{
+				Type_: *adapter.Type,
+				Vmnet: *adapter.Vmnet,
+			}
+			nic, _, err := client.VMNetworkAdaptersManagementApi.CreateNICDevice(ctx, nicParams, *vmId, nil)
+			if err != nil {
+				r.logErrorResponse(err, logger)
+				return ctrl.Result{}, fmt.Errorf("failed to create network adapter: %v", err)
+			}
 
-	if slices.ContainsFunc(statusNetworkAdapters, func(a infrav1.VDNetworkAdapter) bool {
-		return a.Vmnet != nil && vmNet != nil && *a.Vmnet == *vmNet
-	}) {
-		return ctrl.Result{}, nil
+			configParams := vmrest.ConfigVmParamsParameter{
+				Name:  fmt.Sprintf("ethernet%d.virtualDev", nic.Index-1),
+				Value: "e1000e",
+			}
+			_, _, err = client.VMManagementApi.ConfigVMParams(ctx, configParams, *vmId, nil)
+			if err != nil {
+				r.logErrorResponse(err, logger)
+				return ctrl.Result{}, fmt.Errorf("failed to create network adapter: %v", err)
+			}
+		}
 	}
 
-	params := vmrest.NicDeviceParameter{
-		Type_: *vdMachine.Spec.Network.Type,
-		Vmnet: *vmNet,
-	}
-	networkAdapter, _, err := client.VMNetworkAdaptersManagementApi.CreateNICDevice(ctx, params, *vmId, nil)
-	if err != nil {
-		r.logErrorResponse(err, logger)
-		return ctrl.Result{}, fmt.Errorf("failed to create network adapter: %v", err)
-	}
-
-	statusNetworkAdapters = append(statusNetworkAdapters, infrav1.VDNetworkAdapter{
-		Index:      &networkAdapter.Index,
-		Type:       &networkAdapter.Type_,
-		Vmnet:      &networkAdapter.Vmnet,
-		MacAddress: &networkAdapter.MacAddress,
-	})
-
-	vdMachine.Status.NetworkAdapters = statusNetworkAdapters
+	logger.Info("successfully reconciled network adapters")
 
 	return ctrl.Result{RequeueAfter: time.Millisecond}, nil
+}
+
+func (r *VDMachineReconciler) reconcileNetworkAddresses(
+	ctx context.Context,
+	vdMachine *infrav1.VDMachine,
+	logger logr.Logger,
+) (ctrl.Result, error) {
+	if vdMachine.Spec.Network == nil || vdMachine.Spec.Network.Ethernets == nil || len(vdMachine.Spec.Network.Ethernets) == 0 {
+		return ctrl.Result{}, nil
+	}
+	for _, ethernet := range vdMachine.Spec.Network.Ethernets {
+		if ethernet.IpamRef != nil {
+			claimName := vdMachine.Name + "-" + ethernet.Name
+			claim := &ipamv1.IPAddressClaim{}
+			err := r.Client.Get(ctx, client.ObjectKey{
+				Name: claimName, Namespace: vdMachine.Namespace,
+			}, claim)
+
+			if apierrors.IsNotFound(err) {
+				claim = &ipamv1.IPAddressClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      claimName,
+						Namespace: vdMachine.Namespace,
+						OwnerReferences: []metav1.OwnerReference{
+							*metav1.NewControllerRef(vdMachine, infrav1.GroupVersion.WithKind("VDMachine")),
+						},
+					},
+					Spec: ipamv1.IPAddressClaimSpec{
+						PoolRef: *ethernet.IpamRef,
+					},
+				}
+				logger.Info("creating ip claim", "claim", claim)
+				err = r.Client.Create(ctx, claim)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+
+			if err != nil && !apierrors.IsNotFound(err) {
+				return ctrl.Result{}, fmt.Errorf("failed to get ipclaim %s", err)
+			}
+
+			address := &ipamv1.IPAddress{}
+			err = r.Client.Get(ctx, client.ObjectKey{
+				Name: claim.Name, Namespace: vdMachine.Namespace,
+			}, address)
+			if err != nil && !apierrors.IsNotFound(err) {
+				return ctrl.Result{}, err
+			}
+			if address.Spec.Address == "" {
+				logger.Info("waiting IP from IP Claim")
+				return ctrl.Result{RequeueAfter: time.Second}, nil
+			}
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VDMachineReconciler) findIpamAddress(
+	ctx context.Context,
+	vdMachine *infrav1.VDMachine,
+	ethernet *infrav1.VDNetworkEthernet,
+) (*ipamv1.IPAddress, error) {
+	if vdMachine == nil || ethernet == nil {
+		return nil, fmt.Errorf("failed to get ipam address")
+	}
+	claimName := vdMachine.Name + "-" + ethernet.Name
+	address := &ipamv1.IPAddress{}
+	err := r.Client.Get(ctx, client.ObjectKey{
+		Name: claimName, Namespace: vdMachine.Namespace,
+	}, address)
+	if apierrors.IsNotFound(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return address, nil
 }
 
 func (r *VDMachineReconciler) reconcileSharedFolders(
@@ -477,6 +643,12 @@ func (r *VDMachineReconciler) reconcileSharedFolders(
 	logger.Info("shared folders successfully configured")
 
 	return ctrl.Result{RequeueAfter: time.Millisecond}, nil
+}
+
+func contains(adapters []infrav1.VDNetworkAdapter, adapter infrav1.VDNetworkAdapter) bool {
+	return slices.ContainsFunc(adapters, func(a infrav1.VDNetworkAdapter) bool {
+		return *a.Type == *adapter.Type && *a.Vmnet == *adapter.Vmnet
+	})
 }
 
 func sharedFoldersEqual(spec []infrav1.VDSharedFolder, status []infrav1.VDSharedFolder) bool {

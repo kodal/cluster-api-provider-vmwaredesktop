@@ -31,6 +31,19 @@ spec:
     host: ${CONTROL_PLANE_ENDPOINT_IP}
     port: 6443
 ---
+apiVersion: ipam.cluster.x-k8s.io/v1alpha1
+kind: InClusterIPPool
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: ${NAMESPACE}
+  labels:
+    cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+spec:
+  addresses:
+    - 10.0.100.10-10.0.100.255
+  prefix: 16
+  gateway: 10.0.0.2
+---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: VDMachineTemplate
 metadata:
@@ -41,8 +54,13 @@ spec:
     spec:
       templateID: ${TEMPLATE_VM_ID}
       network:
-        vmnet: vmnet2
-        type: custom
+        ethernets:
+          - name: ens160
+            dhcp4: false
+            ipamRef:
+              apiGroup: ipam.cluster.x-k8s.io
+              kind: InClusterIPPool
+              name: ${CLUSTER_NAME}
 ---
 kind: KubeadmControlPlane
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
@@ -198,6 +216,9 @@ spec:
       - path: /etc/modules-load.d/open-vm-tools.conf
         content: fuse
     preKubeadmCommands:
+      - echo "root:Kodal123" | chpasswd
+      - systemctl enable chrony
+      - systemctl restart chrony
       - /etc/kube-vip-prepare.sh
       - systemctl enable --now mnt-hgfs.mount
 ---

@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
@@ -134,15 +135,22 @@ type VDSharedFolder struct {
 }
 
 type VDNetwork struct {
+	Adapters  []VDNetworkAdapter  `json:"adapters,omitempty"`
+	Ethernets []VDNetworkEthernet `json:"ethernets,omitempty"`
+}
+
+type VDNetworkAdapter struct {
 	Type  *string `json:"type,omitempty"`
 	Vmnet *string `json:"vmnet,omitempty"`
 }
 
-type VDNetworkAdapter struct {
-	Index      *int32  `json:"index,omitempty"`
-	Type       *string `json:"type,omitempty"`
-	Vmnet      *string `json:"vmnet,omitempty"`
-	MacAddress *string `json:"macAddress,omitempty"`
+type VDNetworkEthernet struct {
+	// +kubebuilder:validation:MinLength=1
+	Name        string                            `json:"name"`
+	Dhcp4       *bool                             `json:"dhcp4,omitempty"`
+	Dhcp6       *bool                             `json:"dhcp6,omitempty"`
+	IpamRef     *corev1.TypedLocalObjectReference `json:"ipamRef,omitempty"`
+	IpamAddress *string                           `json:"ipamAddress,omitempty"`
 }
 
 // +kubebuilder:object:root=true
