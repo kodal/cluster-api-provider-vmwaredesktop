@@ -382,7 +382,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 	if len(vdMachine.Status.Addresses) == 0 {
 		logger.Info("Getting IP address")
 
-		ip, response, err := client.VMNetworkAdaptersManagementAPI.GetIPAddress(ctx, *vmId).Execute()
+		nics, response, err := client.VMNetworkAdaptersManagementAPI.GetNicInfo(ctx, *vmId).Execute()
 		if err != nil {
 			if response.StatusCode == 500 {
 				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
@@ -390,13 +390,22 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 			return ctrl.Result{}, err
 		}
 
-		logger.Info("VM got IP address", "ip", ip.Ip)
-		vdMachine.Status.Addresses = []clusterv1.MachineAddress{
-			{
-				Type:    clusterv1.MachineInternalIP,
-				Address: ip.Ip,
-			},
+		if len(nics.Nics) == 0 {
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 		}
+
+		addresses := []clusterv1.MachineAddress{}
+
+		for _, nic := range nics.Nics {
+			for _, ip := range nic.Ip {
+				addresses = append(addresses, clusterv1.MachineAddress{
+					Type:    clusterv1.MachineInternalIP,
+					Address: ip,
+				})
+			}
+		}
+		logger.Info("VM got IP addresses", "IPs", addresses)
+		vdMachine.Status.Addresses = addresses
 
 		// Set Ready to true.
 		vdMachine.Status.Ready = true
@@ -462,7 +471,7 @@ func (r *VDMachineReconciler) reconcileNetworkAdapters(
 	for _, adapter := range vdMachine.Spec.Network.Adapters {
 		if !contains(vdMachine.Status.NetworkAdapters, adapter) {
 			nicParams := vmrest.NICDeviceParameter{
-				Type: *adapter.Type,
+				Type:  *adapter.Type,
 				Vmnet: *adapter.Vmnet,
 			}
 			nic, _, err := client.VMNetworkAdaptersManagementAPI.CreateNICDevice(ctx, *vmId).NICDeviceParameter(nicParams).Execute()

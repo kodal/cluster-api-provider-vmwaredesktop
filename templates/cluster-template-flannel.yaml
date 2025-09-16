@@ -56,6 +56,8 @@ spec:
       network:
         ethernets:
           - name: ens160
+            dhcp4: true
+          - name: ens224
             dhcp4: false
             ipamRef:
               apiGroup: ipam.cluster.x-k8s.io
@@ -217,8 +219,6 @@ spec:
         content: fuse
     preKubeadmCommands:
       - echo "root:Kodal123" | chpasswd
-      - systemctl enable chrony
-      - systemctl restart chrony
       - /etc/kube-vip-prepare.sh
       - systemctl enable --now mnt-hgfs.mount
 ---

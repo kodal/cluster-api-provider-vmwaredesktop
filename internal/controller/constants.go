@@ -12,15 +12,6 @@ network:
       {{- template "ethernet" $element }}
     {{- end -}}
   {{- end -}}
-{{- if .NtpServers }}
-ntp:
-  enabled: true
-  ntp_client: chrony
-  servers:
-    {{- range .NtpServers }}
-    - {{ . }}
-    {{- end -}}
-{{- end -}}
 
 {{- define "ethernet" -}}
       {{- if .Dhcp4 }}
