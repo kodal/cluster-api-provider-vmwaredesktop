@@ -269,8 +269,8 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		return res, err
 	}
 
-	if res, err := r.reconcileBootstrapData(ctx, client, vmId, machine, vdMachine, logger); err != nil || !res.IsZero() {
-		return res, err
+	if err := r.reconcileBootstrapData(ctx, client, vmId, machine, vdMachine, logger); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	if *vdMachine.Status.State == "poweredOff" {
@@ -338,16 +338,16 @@ func (r *VDMachineReconciler) reconcileBootstrapData(
 	machine *clusterv1.Machine,
 	vdMachine *infrav1.VDMachine,
 	logger logr.Logger,
-) (ctrl.Result, error) {
+) error {
 	if vdMachine.Status.Initialization.BootstrapDataProvided {
-		return ctrl.Result{}, nil
+		return nil
 	}
 
 	logger.Info("Configuring VM")
 
 	bootstrapData, err := GetSecretData(ctx, r.Client, vdMachine.Namespace, *machine.Spec.Bootstrap.DataSecretName)
 	if err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 
 	logger.Info("Bootstrap data", "data", bootstrapData)
@@ -355,13 +355,13 @@ func (r *VDMachineReconciler) reconcileBootstrapData(
 	bootstrapData = strings.ReplaceAll(bootstrapData, "{ provider_id }", *vdMachine.Spec.ProviderID)
 	encodedBootstrapData := base64.StdEncoding.EncodeToString([]byte(bootstrapData))
 
-	var ethernets []Ethernet
+	ethernets := []Ethernet{}
 
 	for _, vdNetworkEthernet := range vdMachine.Spec.Network.Ethernets {
 
 		ipamAddress, err := r.findIpamAddress(ctx, vdMachine, &vdNetworkEthernet)
 		if err != nil {
-			return ctrl.Result{}, err
+			return err
 		}
 		var addresses, nameservers []string
 		var routes []Route
@@ -393,11 +393,11 @@ func (r *VDMachineReconciler) reconcileBootstrapData(
 	}
 	metadataTemplater, err := template.New("metadata").Parse(metadataTemplate)
 	if err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	buffer := &bytes.Buffer{}
 	if err = metadataTemplater.Execute(buffer, metadata); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to render %s", err)
+		return fmt.Errorf("failed to render %s", err)
 	}
 	metadataString := buffer.String()
 
@@ -418,14 +418,14 @@ func (r *VDMachineReconciler) reconcileBootstrapData(
 		}
 		_, _, err := client.VMManagementAPI.ConfigVMParams(ctx, *vmId).ConfigVMParamsParameter(configParam).Execute()
 		if err != nil {
-			return ctrl.Result{}, err
+			return err
 		}
 	}
 
 	vdMachine.Status.Initialization.BootstrapDataProvided = true
 	logger.Info("VM configured with guestinfo parameters")
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
 func (r *VDMachineReconciler) reconcileNetworkAdapters(
