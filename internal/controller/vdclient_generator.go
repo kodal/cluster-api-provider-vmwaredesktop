@@ -17,18 +17,18 @@ func NewVDClient(ctx context.Context) (*vmrest.APIClient, context.Context) {
 		os.Exit(1)
 	}
 	username := os.Getenv("VMREST_USERNAME")
-	if url == "" {
+	if username == "" {
 		logger.Info("missing required env VMREST_USERNAME")
 		os.Exit(1)
 	}
 	password := os.Getenv("VMREST_PASSWORD")
-	if url == "" {
+	if password == "" {
 		logger.Info("missing required env VMREST_PASSWORD")
 		os.Exit(1)
 	}
 
 	config := vmrest.NewConfiguration()
-	config.BasePath = url
+	config.Servers[0].URL = url
 	auth := vmrest.BasicAuth{
 		UserName: username,
 		Password: password,

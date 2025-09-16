@@ -150,7 +150,7 @@ func (r *VDMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	vdClient, ctx := NewVDClient(ctx)
 	vmId := vdMachine.Spec.VmID
 	if vmId != nil {
-		powerState, response, err := vdClient.VMPowerManagementApi.GetPowerState(ctx, *vmId, nil)
+		powerState, response, err := vdClient.VMPowerManagementAPI.GetPowerState(ctx, *vmId).Execute()
 		if err != nil {
 			if response.StatusCode == 404 {
 				logger.Info("VM not found")
@@ -200,13 +200,13 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 	logger = logger.WithValues("vmID", vmId)
 
 	if vmId == nil {
-		clone := vmrest.VmCloneParameter{
+		clone := vmrest.VMCloneParameter{
 			Name:     vdMachine.Name,
 			ParentId: vdMachine.Spec.TemplateID,
 		}
 
 		logger.Info("Creating VM", "templateId", vdMachine.Spec.TemplateID)
-		vm, _, err := client.VMManagementApi.CreateVM(ctx, clone, nil)
+		vm, _, err := client.VMManagementAPI.CreateVM(ctx).VMCloneParameter(clone).Execute()
 		if err != nil {
 			r.logErrorResponse(err, logger)
 			return ctrl.Result{}, fmt.Errorf("failed to create VM: %v", err)
@@ -216,8 +216,8 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		vdMachine.Spec.VmID = &vm.Id
 
 		hardware := infrav1.VDHardware{
-			Cpu:    vm.Cpu.Processors,
-			Memory: vm.Memory,
+			Cpu:    *vm.Cpu.Processors,
+			Memory: *vm.Memory,
 		}
 		vdMachine.Status.Hardware = hardware
 		logger.Info("VM created", "id", vm.Id)
@@ -240,20 +240,20 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 
 		logger.Info("Updating VM hardware", "cpu", cpu, "memory", memory)
 
-		vdParameter := vmrest.VmParameter{
-			Processors: cpu,
-			Memory:     memory,
+		vdParameter := vmrest.VMParameter{
+			Processors: &cpu,
+			Memory:     &memory,
 		}
 
-		result, _, err := client.VMManagementApi.UpdateVM(ctx, vdParameter, *vmId, nil)
+		result, _, err := client.VMManagementAPI.UpdateVM(ctx, *vmId).VMParameter(vdParameter).Execute()
 		if err != nil {
 			r.logErrorResponse(err, logger)
 			return ctrl.Result{}, fmt.Errorf("failed to update VM hardware: %v", err)
 		}
 		logger.Info("VM hardware updated", "result", result)
 		hardware := infrav1.VDHardware{
-			Cpu:    result.Cpu.Processors,
-			Memory: result.Memory,
+			Cpu:    *result.Cpu.Processors,
+			Memory: *result.Memory,
 		}
 		vdMachine.Status.Hardware = hardware
 		return ctrl.Result{}, nil
@@ -344,11 +344,11 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		}
 
 		for name, value := range params {
-			configParam := vmrest.ConfigVmParamsParameter{
-				Name:  name,
-				Value: value,
+			configParam := vmrest.ConfigVMParamsParameter{
+				Name:  &name,
+				Value: &value,
 			}
-			_, _, err := client.VMManagementApi.ConfigVMParams(ctx, configParam, *vmId, nil)
+			_, _, err := client.VMManagementAPI.ConfigVMParams(ctx, *vmId).ConfigVMParamsParameter(configParam).Execute()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -364,7 +364,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 
 		logger.Info(message)
 
-		powerState, response, err := client.VMPowerManagementApi.ChangePowerState(ctx, "on", *vmId, nil)
+		powerState, response, err := client.VMPowerManagementAPI.ChangePowerState(ctx, *vmId).Body(string(vmrest.VMPOWEROPERATION_ON)).Execute()
 		if err != nil {
 			if response.StatusCode == 404 {
 				logger.Info("VM not found")
@@ -382,7 +382,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 	if len(vdMachine.Status.Addresses) == 0 {
 		logger.Info("Getting IP address")
 
-		ip, response, err := client.VMNetworkAdaptersManagementApi.GetIPAddress(ctx, *vmId, nil)
+		ip, response, err := client.VMNetworkAdaptersManagementAPI.GetIPAddress(ctx, *vmId).Execute()
 		if err != nil {
 			if response.StatusCode == 500 {
 				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
@@ -439,7 +439,7 @@ func (r *VDMachineReconciler) reconcileNetworkAdapters(
 
 	logger.Info("reconcile network adapters")
 
-	resultNetworkAdapters, _, err := client.VMNetworkAdaptersManagementApi.GetAllNICDevices(ctx, *vmId, nil)
+	resultNetworkAdapters, _, err := client.VMNetworkAdaptersManagementAPI.GetAllNICDevices(ctx, *vmId).Execute()
 	if err != nil {
 		r.logErrorResponse(err, logger)
 		return ctrl.Result{}, fmt.Errorf("failed to get VM network adapters: %v", err)
@@ -448,7 +448,7 @@ func (r *VDMachineReconciler) reconcileNetworkAdapters(
 	statusNetworkAdapters := []infrav1.VDNetworkAdapter{}
 	for _, networkAdapter := range resultNetworkAdapters.Nics {
 		statusNetworkAdapters = append(statusNetworkAdapters, infrav1.VDNetworkAdapter{
-			Type:  &networkAdapter.Type_,
+			Type:  &networkAdapter.Type,
 			Vmnet: &networkAdapter.Vmnet,
 		})
 	}
@@ -461,21 +461,23 @@ func (r *VDMachineReconciler) reconcileNetworkAdapters(
 
 	for _, adapter := range vdMachine.Spec.Network.Adapters {
 		if !contains(vdMachine.Status.NetworkAdapters, adapter) {
-			nicParams := vmrest.NicDeviceParameter{
-				Type_: *adapter.Type,
+			nicParams := vmrest.NICDeviceParameter{
+				Type: *adapter.Type,
 				Vmnet: *adapter.Vmnet,
 			}
-			nic, _, err := client.VMNetworkAdaptersManagementApi.CreateNICDevice(ctx, nicParams, *vmId, nil)
+			nic, _, err := client.VMNetworkAdaptersManagementAPI.CreateNICDevice(ctx, *vmId).NICDeviceParameter(nicParams).Execute()
 			if err != nil {
 				r.logErrorResponse(err, logger)
 				return ctrl.Result{}, fmt.Errorf("failed to create network adapter: %v", err)
 			}
 
-			configParams := vmrest.ConfigVmParamsParameter{
-				Name:  fmt.Sprintf("ethernet%d.virtualDev", nic.Index-1),
-				Value: "e1000e",
+			name := fmt.Sprintf("ethernet%d.virtualDev", nic.Index-1)
+			value := "e1000e"
+			configParams := vmrest.ConfigVMParamsParameter{
+				Name:  &name,
+				Value: &value,
 			}
-			_, _, err = client.VMManagementApi.ConfigVMParams(ctx, configParams, *vmId, nil)
+			_, _, err = client.VMManagementAPI.ConfigVMParams(ctx, *vmId).ConfigVMParamsParameter(configParams).Execute()
 			if err != nil {
 				r.logErrorResponse(err, logger)
 				return ctrl.Result{}, fmt.Errorf("failed to create network adapter: %v", err)
@@ -579,7 +581,7 @@ func (r *VDMachineReconciler) reconcileSharedFolders(
 
 	logger.Info("reconcile shared folders")
 
-	resultSharedFolders, _, err := client.VMSharedFoldersManagementApi.GetAllSharedFolders(ctx, *vmId, nil)
+	resultSharedFolders, _, err := client.VMSharedFoldersManagementAPI.GetAllSharedFolders(ctx, *vmId).Execute()
 	if err != nil {
 		r.logErrorResponse(err, logger)
 		return ctrl.Result{}, fmt.Errorf("failed to get VM shared folders: %v", err)
@@ -612,7 +614,7 @@ func (r *VDMachineReconciler) reconcileSharedFolders(
 	for id := range statusMap {
 		if _, exists := specMap[id]; !exists {
 			logger.Info("Deleting stale shared folder", "FolderId", id)
-			_, err := client.VMSharedFoldersManagementApi.DeleteSharedFolder(ctx, *vmId, id, nil)
+			_, err := client.VMSharedFoldersManagementAPI.DeleteSharedFolder(ctx, *vmId, id).Execute()
 			if err != nil {
 				r.logErrorResponse(err, logger)
 				return ctrl.Result{}, fmt.Errorf("failed to delete stale shared folder %q: %v", id, err)
@@ -633,7 +635,7 @@ func (r *VDMachineReconciler) reconcileSharedFolders(
 		}
 
 		logger.Info("Creating/updating shared folder", "FolderId", sf.FolderId, "HostPath", sf.HostPath)
-		_, _, err := client.VMSharedFoldersManagementApi.CreateSharedFolder(ctx, params, *vmId, nil)
+		_, _, err := client.VMSharedFoldersManagementAPI.CreateSharedFolder(ctx, *vmId).SharedFolder(params).Execute()
 		if err != nil {
 			r.logErrorResponse(err, logger)
 			return ctrl.Result{}, fmt.Errorf("failed to create shared folder %q: %v", sf.FolderId, err)
@@ -680,7 +682,7 @@ func sharedFoldersEqual(spec []infrav1.VDSharedFolder, status []infrav1.VDShared
 }
 
 func (r *VDMachineReconciler) logErrorResponse(err error, logger logr.Logger) {
-	if swaggerErr, ok := err.(vmrest.GenericSwaggerError); ok {
+	if swaggerErr, ok := err.(vmrest.GenericOpenAPIError); ok {
 		logger.Info("Response error", "errorModel", swaggerErr.Model())
 	}
 
@@ -700,7 +702,7 @@ func (r *VDMachineReconciler) reconcileDelete(ctx context.Context, vdMachine *in
 
 	if *vdMachine.Status.State != "poweredOff" {
 		logger.Info("Power of VM")
-		powerState, response, err := client.VMPowerManagementApi.ChangePowerState(ctx, "off", *vmId, nil)
+		_, response, err := client.VMPowerManagementAPI.ChangePowerState(ctx, *vmId).Body(string(vmrest.VMPOWEROPERATION_OFF)).Execute()
 		if err != nil {
 			if response.StatusCode == 404 {
 				logger.Info("VM already deleted")
@@ -710,7 +712,7 @@ func (r *VDMachineReconciler) reconcileDelete(ctx context.Context, vdMachine *in
 			return ctrl.Result{}, err
 		}
 
-		powerState, response, err = client.VMPowerManagementApi.GetPowerState(ctx, *vmId, nil)
+		powerState, response, err := client.VMPowerManagementAPI.GetPowerState(ctx, *vmId).Execute()
 		if err != nil {
 			if response.StatusCode == 404 {
 				logger.Info("VM already deleted")
@@ -724,7 +726,7 @@ func (r *VDMachineReconciler) reconcileDelete(ctx context.Context, vdMachine *in
 	}
 
 	logger.Info("Delete VM")
-	_, err := client.VMManagementApi.DeleteVM(ctx, *vmId, nil)
+	_, err := client.VMManagementAPI.DeleteVM(ctx, *vmId).Execute()
 
 	if err != nil {
 		return ctrl.Result{}, err

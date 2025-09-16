@@ -3,7 +3,7 @@ module github.com/kodal/cluster-api-provider-vmwaredesktop
 go 1.24.0
 
 require (
-	github.com/kodal/vmrest-go-client v0.1.1
+	github.com/kodal/vmrest-go-client v0.2.0
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0
 	golang.org/x/crypto v0.38.0
@@ -65,6 +65,7 @@ require (
 	github.com/valyala/fastjson v1.6.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
+	gopkg.in/validator.v2 v2.0.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	k8s.io/cluster-bootstrap v0.33.1 // indirect
