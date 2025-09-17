@@ -369,7 +369,6 @@ func (r *VDMachineReconciler) reconcileBootstrapData(
 			addresses = append(addresses, fmt.Sprintf("%s/%d", ipamAddress.Spec.Address, ipamAddress.Spec.Prefix))
 			if ipamAddress.Spec.Gateway != "" {
 				gateway := ipamAddress.Spec.Gateway
-				nameservers = append(nameservers, gateway)
 				routes = append(routes, Route{
 					To:  "0.0.0.0/0",
 					Via: gateway,
