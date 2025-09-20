@@ -131,6 +131,17 @@ spec:
                                   items:
                                     type: string
                                   type: array
+                                routes:
+                                  items:
+                                    properties:
+                                      to:
+                                        type: string
+                                      via:
+                                        type: string
+                                    required:
+                                    - to
+                                    type: object
+                                  type: array
                                 typeIP:
                                   default: InternalIP
                                   description: MachineAddressType describes a valid

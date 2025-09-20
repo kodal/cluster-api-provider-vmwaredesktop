@@ -33,7 +33,9 @@ network:
       routes:
       {{- range .Routes }}
         - to: {{ .To }}
+          {{- if .Via }}
           via: {{ .Via }}
+          {{- end -}}
       {{- end -}}
       {{- end -}}
       {{- if .Nameservers }}
