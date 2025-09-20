@@ -3,6 +3,9 @@ package controller
 const metadataTemplate = `
 instance-id: {{ .InstanceId }}
 local-hostname: {{ .Hostname }}
+{{- if .NodeIP }}
+node-ip: {{ .NodeIP }}
+{{- end }}
 network:
   version: 2
   {{- if .Ethernets }}

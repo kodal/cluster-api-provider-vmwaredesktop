@@ -146,11 +146,15 @@ type VDNetworkAdapter struct {
 
 type VDNetworkEthernet struct {
 	// +kubebuilder:validation:MinLength=1
-	Name        string                            `json:"name"`
-	Dhcp4       *bool                             `json:"dhcp4,omitempty"`
-	Dhcp6       *bool                             `json:"dhcp6,omitempty"`
-	IpamRef     *corev1.TypedLocalObjectReference `json:"ipamRef,omitempty"`
-	IpamAddress *string                           `json:"ipamAddress,omitempty"`
+	Name  string `json:"name"`
+	Dhcp4 *bool  `json:"dhcp4,omitempty"`
+	Dhcp6 *bool  `json:"dhcp6,omitempty"`
+	// +kubebuilder:default=InternalIP
+	TypeIP       clusterv1.MachineAddressType      `json:"typeIP,omitempty"`
+	IpamAsNodeIP *bool                             `json:"ipamAsNodeIP,omitempty"`
+	IpamRef      *corev1.TypedLocalObjectReference `json:"ipamRef,omitempty"`
+	IpamAddress  *string                           `json:"ipamAddress,omitempty"`
+	Nameservers  []string                          `json:"nameservers,omitempty"`
 }
 
 // +kubebuilder:object:root=true

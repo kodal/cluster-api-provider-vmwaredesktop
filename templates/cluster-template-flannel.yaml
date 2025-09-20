@@ -59,6 +59,9 @@ spec:
             dhcp4: true
           - name: ens224
             dhcp4: false
+            nameservers:
+              - 1.1.1.1
+              - 8.8.8.8
             ipamRef:
               apiGroup: ipam.cluster.x-k8s.io
               kind: InClusterIPPool
@@ -217,6 +220,77 @@ spec:
           WantedBy=multi-user.target
       - path: /etc/modules-load.d/open-vm-tools.conf
         content: fuse
+      - path: /etc/select-node-ip.sh
+        owner: root:root
+        permissions: "0700"
+        content: |
+          #!/bin/bash
+
+          if [ -z "${NODE_SUBNET}" ]; then
+            echo "NODE_SUBNET not set, skipping node-ip selection"
+            exit 0
+          fi
+
+          ALLOWED4=("${NODE_SUBNET}")
+          ALLOWED6=()
+
+          IP4_LIST=($(ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1))
+          IP6_LIST=($(ip -6 -o addr show scope global | awk '{print $4}' | cut -d/ -f1))
+
+          select_ip=""
+          ip_in_subnet() {
+            local ip=$$1
+            local cidr=$$2
+
+            IFS=. read -r i1 i2 i3 i4 <<< "$$ip"
+            IFS=/ read -r net mask <<< "$$cidr"
+            IFS=. read -r n1 n2 n3 n4 <<< "$$net"
+
+            ip_num=$(( (i1<<24) + (i2<<16) + (i3<<8) + i4 ))
+            net_num=$(( (n1<<24) + (n2<<16) + (n3<<8) + n4 ))
+            mask_num=$(( 0xFFFFFFFF << (32 - mask) & 0xFFFFFFFF ))
+
+            if (( (ip_num & mask_num) == (net_num & mask_num) )); then
+                return 0  # IP в сети
+            else
+                return 1  # IP не в сети
+            fi
+          }
+
+          for ip in "$${IP4_LIST[@]}"; do
+            for net in "$${ALLOWED4[@]}"; do
+              if ip_in_subnet "$$ip" "$net"; then
+                select_ip="$$ip"
+                break 2
+              fi
+            done
+          done
+
+          if [ -z "$$select_ip" ]; then
+            for ip in "$${IP6_LIST[@]}"; do
+              for net in "$${ALLOWED6[@]}"; do
+                if ip_in_subnet "$ip" "$net"; then
+                  select_ip="$$ip"
+                  break 2
+                fi
+              done
+            done
+          fi
+
+          if [ -z "$$select_ip" ]; then
+            echo "No suitable node IP found" >&2
+            exit 1
+          fi
+
+          mkdir -p /etc/kubelet
+
+          echo "KUBELET_EXTRA_ARGS=--node-ip=$select_ip" > /etc/kubelet/node_ip.env
+      - path: /etc/systemd/system/kubelet.service.d/20-node-ip.conf
+        content: |
+          [Service]
+          ExecStartPre=/etc/select-node-ip.sh
+          EnvironmentFile=-/etc/kubelet/node_ip.env
+
     preKubeadmCommands:
       - echo "root:Kodal123" | chpasswd
       - /etc/kube-vip-prepare.sh

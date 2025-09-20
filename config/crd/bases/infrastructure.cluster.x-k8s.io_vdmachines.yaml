@@ -69,6 +69,8 @@ spec:
                           type: boolean
                         ipamAddress:
                           type: string
+                        ipamAsNodeIP:
+                          type: boolean
                         ipamRef:
                           description: |-
                             TypedLocalObjectReference contains enough information to let you locate the
@@ -93,6 +95,21 @@ spec:
                           x-kubernetes-map-type: atomic
                         name:
                           minLength: 1
+                          type: string
+                        nameservers:
+                          items:
+                            type: string
+                          type: array
+                        typeIP:
+                          default: InternalIP
+                          description: MachineAddressType describes a valid MachineAddress
+                            type.
+                          enum:
+                          - Hostname
+                          - ExternalIP
+                          - InternalIP
+                          - ExternalDNS
+                          - InternalDNS
                           type: string
                       required:
                       - name
