@@ -76,7 +76,7 @@ type Ethernet struct {
 
 type Route struct {
 	To  string
-	Via string
+	Via *string
 }
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=vdmachines,verbs=get;list;watch;create;update;patch;delete
@@ -380,13 +380,16 @@ func (r *VDMachineReconciler) reconcileBootstrapData(
 			if vdNetworkEthernet.IpamAsNodeIP != nil && *vdNetworkEthernet.IpamAsNodeIP {
 				nodeIP = &ipamAddress.Spec.Address
 			}
-			if ipamAddress.Spec.Gateway != "" {
-				gateway := ipamAddress.Spec.Gateway
-				routes = append(routes, Route{
-					To:  "0.0.0.0/0",
-					Via: gateway,
-				})
+		}
+		for _, r := range vdNetworkEthernet.Routes {
+			newRoute := Route {
+				To: r.To,
+				Via: r.Via,
 			}
+			if newRoute.Via == nil && ipamAddress != nil {
+				newRoute.Via = &ipamAddress.Spec.Gateway
+			}
+			routes = append(routes, newRoute)
 		}
 		ethernets = append(ethernets, Ethernet{
 			Name:        &vdNetworkEthernet.Name,

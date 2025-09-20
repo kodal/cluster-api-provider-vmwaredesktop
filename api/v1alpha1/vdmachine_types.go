@@ -155,6 +155,12 @@ type VDNetworkEthernet struct {
 	IpamRef      *corev1.TypedLocalObjectReference `json:"ipamRef,omitempty"`
 	IpamAddress  *string                           `json:"ipamAddress,omitempty"`
 	Nameservers  []string                          `json:"nameservers,omitempty"`
+	Routes       []VDNetworkRoute                  `json:"routes,omitempty"`
+}
+
+type VDNetworkRoute struct {
+	To  string  `json:"to"`
+	Via *string `json:"via,omitempty"`
 }
 
 // +kubebuilder:object:root=true

@@ -59,9 +59,12 @@ spec:
             dhcp4: true
           - name: ens224
             dhcp4: false
+            routes: 
+              - to: ${NODE_SUBNET}
             nameservers:
               - 1.1.1.1
               - 8.8.8.8
+            ipamAsNodeIP: true
             ipamRef:
               apiGroup: ipam.cluster.x-k8s.io
               kind: InClusterIPPool
@@ -83,15 +86,22 @@ spec:
       namespace: ${NAMESPACE}
   kubeadmConfigSpec:
     initConfiguration:
+      localAPIEndpoint:
+        advertiseAddress: "{{ ds.meta_data.node_ip }}"
       nodeRegistration:
         name: "{{ ds.meta_data.local_hostname }}"
         kubeletExtraArgs:
           provider-id: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
+          node-ip: "{{ ds.meta_data.node_ip }}"
     joinConfiguration:
+      controlPlane:
+        localAPIEndpoint:
+          advertiseAddress: "{{ ds.meta_data.node_ip }}"
       nodeRegistration:
         name: "{{ ds.meta_data.local_hostname }}"
         kubeletExtraArgs:
           provider-id: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
+          node-ip: "{{ ds.meta_data.node_ip }}"
     users:
       - name: root
         sshAuthorizedKeys:
