@@ -382,8 +382,8 @@ func (r *VDMachineReconciler) reconcileBootstrapData(
 			}
 		}
 		for _, r := range vdNetworkEthernet.Routes {
-			newRoute := Route {
-				To: r.To,
+			newRoute := Route{
+				To:  r.To,
 				Via: r.Via,
 			}
 			if newRoute.Via == nil && ipamAddress != nil {
