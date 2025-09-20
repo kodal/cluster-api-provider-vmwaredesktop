@@ -59,6 +59,7 @@ type VDMachineReconciler struct {
 type Metadata struct {
 	InstanceId *string
 	Hostname   *string
+	NodeIP     *string
 	Ethernets  []Ethernet
 }
 
@@ -310,10 +311,11 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 
 		addresses := []clusterv1.MachineAddress{}
 
-		for _, nic := range nics.Nics {
+		for i, nic := range nics.Nics {
+			typeIP := vdMachine.Spec.Network.Ethernets[i].TypeIP
 			for _, ip := range nic.Ip {
 				addresses = append(addresses, clusterv1.MachineAddress{
-					Type:    clusterv1.MachineInternalIP,
+					Type:    typeIP,
 					Address: ip,
 				})
 			}
@@ -356,6 +358,7 @@ func (r *VDMachineReconciler) reconcileBootstrapData(
 	encodedBootstrapData := base64.StdEncoding.EncodeToString([]byte(bootstrapData))
 
 	ethernets := []Ethernet{}
+	var nodeIP *string
 
 	for _, vdNetworkEthernet := range vdMachine.Spec.Network.Ethernets {
 
@@ -363,10 +366,13 @@ func (r *VDMachineReconciler) reconcileBootstrapData(
 		if err != nil {
 			return err
 		}
-		var addresses, nameservers []string
+		var addresses []string
 		var routes []Route
 		if ipamAddress != nil && ipamAddress.Spec.Address != "" {
 			addresses = append(addresses, fmt.Sprintf("%s/%d", ipamAddress.Spec.Address, ipamAddress.Spec.Prefix))
+			if vdNetworkEthernet.IpamAsNodeIP != nil && *vdNetworkEthernet.IpamAsNodeIP {
+				nodeIP = &ipamAddress.Spec.Address
+			}
 			if ipamAddress.Spec.Gateway != "" {
 				gateway := ipamAddress.Spec.Gateway
 				routes = append(routes, Route{
@@ -380,7 +386,7 @@ func (r *VDMachineReconciler) reconcileBootstrapData(
 			Dhcp4:       vdNetworkEthernet.Dhcp4,
 			Dhcp6:       vdNetworkEthernet.Dhcp6,
 			Addresses:   addresses,
-			Nameservers: nameservers,
+			Nameservers: vdNetworkEthernet.Nameservers,
 			Routes:      routes,
 		})
 	}
@@ -388,6 +394,7 @@ func (r *VDMachineReconciler) reconcileBootstrapData(
 	metadata := Metadata{
 		InstanceId: vmId,
 		Hostname:   &vdMachine.Name,
+		NodeIP:     nodeIP,
 		Ethernets:  ethernets,
 	}
 	metadataTemplater, err := template.New("metadata").Parse(metadataTemplate)
