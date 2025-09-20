@@ -150,7 +150,7 @@ type VDNetworkEthernet struct {
 	Dhcp4 *bool  `json:"dhcp4,omitempty"`
 	Dhcp6 *bool  `json:"dhcp6,omitempty"`
 	// +kubebuilder:default=InternalIP
-	TypeIP       clusterv1.MachineAddressType      `json:"typeIP,omitempty"`
+	TypeIP       *clusterv1.MachineAddressType     `json:"typeIP,omitempty"`
 	IpamAsNodeIP *bool                             `json:"ipamAsNodeIP,omitempty"`
 	IpamRef      *corev1.TypedLocalObjectReference `json:"ipamRef,omitempty"`
 	IpamAddress  *string                           `json:"ipamAddress,omitempty"`

@@ -313,9 +313,13 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 
 		for i, nic := range nics.Nics {
 			typeIP := vdMachine.Spec.Network.Ethernets[i].TypeIP
+			if typeIP == nil {
+				internalIP := clusterv1.MachineInternalIP
+				typeIP = &internalIP
+			}
 			for _, ip := range nic.Ip {
 				addresses = append(addresses, clusterv1.MachineAddress{
-					Type:    typeIP,
+					Type:    *typeIP,
 					Address: ip,
 				})
 			}
