@@ -40,9 +40,9 @@ metadata:
     cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
 spec:
   addresses:
-    - 10.0.100.10-10.0.100.255
-  prefix: 16
-  gateway: 10.0.0.2
+    - ${SUBNET_PREFIX}.10-${SUBNET_PREFIX}.255
+  prefix: 24
+  gateway: ${SUBNET_PREFIX}.2
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: VDMachineTemplate
@@ -54,6 +54,9 @@ spec:
     spec:
       templateID: ${TEMPLATE_VM_ID}
       network:
+        adapters:
+          - vmnet: vmnet2
+            type: custom
         ethernets:
           - name: ens160
             dhcp4: true

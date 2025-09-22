@@ -495,28 +495,34 @@ func (r *VDMachineReconciler) reconcileNetworkAdapters(
 		return ctrl.Result{}, nil
 	}
 
-	for _, adapter := range vdMachine.Spec.Network.Adapters {
+	startIndex := len(resultNetworkAdapters.Nics)
+
+	for index, adapter := range vdMachine.Spec.Network.Adapters {
 		if !contains(vdMachine.Status.NetworkAdapters, adapter) {
-			nicParams := vmrest.NICDeviceParameter{
-				Type:  *adapter.Type,
-				Vmnet: *adapter.Vmnet,
+			vmxnet3 := "vmxnet3"
+			virtualDev := adapter.VirtualDev
+			if virtualDev == nil {
+				virtualDev = &vmxnet3
 			}
-			nic, _, err := client.VMNetworkAdaptersManagementAPI.CreateNICDevice(ctx, *vmId).NICDeviceParameter(nicParams).Execute()
-			if err != nil {
-				r.logErrorResponse(err, logger)
-				return ctrl.Result{}, fmt.Errorf("failed to create network adapter: %v", err)
+			params := map[string]string{
+				"connectionType": *adapter.Type,
+				"virtualDev":     *virtualDev,
+				"vnet":           *adapter.Vmnet,
+				"present":        "TRUE",
+				"addressType":    "generated",
 			}
 
-			name := fmt.Sprintf("ethernet%d.virtualDev", nic.Index-1)
-			value := "e1000e"
-			configParams := vmrest.ConfigVMParamsParameter{
-				Name:  &name,
-				Value: &value,
-			}
-			_, _, err = client.VMManagementAPI.ConfigVMParams(ctx, *vmId).ConfigVMParamsParameter(configParams).Execute()
-			if err != nil {
-				r.logErrorResponse(err, logger)
-				return ctrl.Result{}, fmt.Errorf("failed to create network adapter: %v", err)
+			for name, value := range params {
+				paramName := fmt.Sprintf("ethernet%d.%s", startIndex+index, name)
+				configParams := vmrest.ConfigVMParamsParameter{
+					Name:  &paramName,
+					Value: &value,
+				}
+				_, _, err = client.VMManagementAPI.ConfigVMParams(ctx, *vmId).ConfigVMParamsParameter(configParams).Execute()
+				if err != nil {
+					r.logErrorResponse(err, logger)
+					return ctrl.Result{}, fmt.Errorf("failed to create network adapter: %v", err)
+				}
 			}
 		}
 	}

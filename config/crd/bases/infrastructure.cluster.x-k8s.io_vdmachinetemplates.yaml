@@ -85,6 +85,8 @@ spec:
                               properties:
                                 type:
                                   type: string
+                                virtualDev:
+                                  type: string
                                 vmnet:
                                   type: string
                               type: object
