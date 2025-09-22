@@ -140,8 +140,9 @@ type VDNetwork struct {
 }
 
 type VDNetworkAdapter struct {
-	Type  *string `json:"type,omitempty"`
-	Vmnet *string `json:"vmnet,omitempty"`
+	Type       *string `json:"type,omitempty"`
+	Vmnet      *string `json:"vmnet,omitempty"`
+	VirtualDev *string `json:"virtualDev,omitempty"`
 }
 
 type VDNetworkEthernet struct {
