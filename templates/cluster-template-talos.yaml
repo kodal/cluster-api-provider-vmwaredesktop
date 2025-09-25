@@ -25,6 +25,19 @@ spec:
     host: ${CONTROL_PLANE_ENDPOINT_IP}
     port: 6443
 ---
+apiVersion: ipam.cluster.x-k8s.io/v1alpha1
+kind: InClusterIPPool
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: ${NAMESPACE}
+  labels:
+    cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+spec:
+  addresses:
+    - ${SUBNET_PREFIX}.10-${SUBNET_PREFIX}.255
+  prefix: 24
+  gateway: ${SUBNET_PREFIX}.2
+---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: VDMachineTemplate
 metadata:
@@ -33,9 +46,21 @@ spec:
   template:
     spec:
       templateID: ${TALOS_VM_ID}
-      networkConfig: |
-        network:
-          version: 2
+      network:
+        adapters:
+          - vmnet: vmnet2
+            type: custom
+            virtualDev: e1000e
+        ethernets:
+          - name: eth0
+            dhcp4: true
+          - name: eth1
+            dhcp4: false
+            ipamAsNodeIP: true
+            ipamRef:
+              apiGroup: ipam.cluster.x-k8s.io
+              kind: InClusterIPPool
+              name: ${CLUSTER_NAME}
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
 kind: TalosControlPlane
@@ -56,19 +81,36 @@ spec:
         - |
           machine:
             install:
-              image: ghcr.io/kodal/talos-installer:v1.11.0
+              image: ${TALOS_IMAGE}
               disk: /dev/sda
+            features:
+              kubePrism:
+                enabled: true
             network: 
               interfaces:
-                - interface: ens192
+                - interface: eth0
                   dhcp: true
+                - interface: eth1
+                  dhcp: false
+                  routes:
+                    - network: ${NODE_SUBNET}
+                      gateway: ${SUBNET_PREFIX}.2
                   vip:
                     ip: ${CONTROL_PLANE_ENDPOINT_IP}
+              nameservers:
+                - 1.1.1.1
+                - 8.8.8.8
             kubelet:
               extraArgs:
                 provider-id: "{ provider_id }"
+              nodeIP:
+                validSubnets:
+                  - ${NODE_SUBNET}
           cluster:
             allowSchedulingOnControlPlanes: ${CONTROL_PLANE_ALLOW_SCHEDULING=true}
+            etcd:
+              advertisedSubnets:
+                - ${NODE_SUBNET}
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
@@ -103,9 +145,10 @@ spec:
   template:
     spec:
       templateID: ${TALOS_VM_ID}
-      networkConfig: |
-        network:
-          version: 2
+      network:
+        adapters:
+          - vmnet: vmnet2
+            type: custom
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 kind: TalosConfigTemplate
@@ -120,12 +163,19 @@ spec:
         - |
           machine:
             install:
-              image: ghcr.io/kodal/talos-installer:v1.11.0
+              image: ${TALOS_IMAGE}
               disk: /dev/sda
             network: 
               interfaces:
-                - interface: ens192
+                - interface: eth0
                   dhcp: true
+                - interface: eth1
+                  dhcp: false
+                  routes:
+                    - network: ${NODE_SUBNET}
+                      gateway: ${SUBNET_PREFIX}.2
+                  vip:
+                    ip: ${CONTROL_PLANE_ENDPOINT_IP}
             kubelet:
               extraArgs:
                 provider-id: "{ provider_id }"
