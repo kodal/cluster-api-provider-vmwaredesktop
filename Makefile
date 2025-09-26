@@ -262,7 +262,7 @@ clean-tilt: ## Clean up Tilt in a kind cluster.
 
 ##@ Talos
 
-TALOS_VERSION ?= v1.11.0
+TALOS_VERSION ?= v1.11.1
 
 .PHONY: talos-imager
 talos-imager: ## Build the Talos imager tool
@@ -275,10 +275,10 @@ talos-imager: ## Build the Talos imager tool
 talos-factory:
 	@ID=$$(curl -skLX POST --data-binary @talos/factory.yaml https://factory.talos.dev/schematics | jq -r '.id'); \
 	echo $$ID:$(TALOS_VERSION); \
-	URL=https://factory.talos.dev/image/$$ID/$(TALOS_VERSION)/nocloud-arm64.iso; \
+	URL=https://factory.talos.dev/image/$$ID/$(TALOS_VERSION)/vmware-arm64.iso; \
 	echo $$URL; \
 	mkdir -p $(PWD)/_talos/factory/$(TALOS_VERSION); \
-	curl -kL $$URL -o $(PWD)/_talos/factory/$(TALOS_VERSION)/nocloud-arm64.iso
+	curl -kL $$URL -o $(PWD)/_talos/factory/$(TALOS_VERSION)/vmware-arm64.iso
 
 .PHONY: talos-push-vmtoolsd
 talos-push-vmtoolsd:

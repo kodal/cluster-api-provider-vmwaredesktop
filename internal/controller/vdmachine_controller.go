@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"net"
 	"slices"
 	"strings"
 	"time"
@@ -320,10 +321,14 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 				internalIP := clusterv1.MachineInternalIP
 				typeIP = &internalIP
 			}
-			for _, ip := range nic.Ip {
+			for _, ipCidr := range nic.Ip {
+				ip, _, err := net.ParseCIDR(ipCidr)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
 				addresses = append(addresses, clusterv1.MachineAddress{
 					Type:    *typeIP,
-					Address: ip,
+					Address: ip.String(),
 				})
 			}
 		}
