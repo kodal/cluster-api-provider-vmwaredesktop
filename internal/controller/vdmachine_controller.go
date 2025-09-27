@@ -336,6 +336,9 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 				})
 			}
 		}
+		if len(addresses) != len(vdMachine.Spec.Network.Ethernets) {
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
 		logger.Info("VM got IP addresses", "IPs", addresses)
 		vdMachine.Status.Addresses = addresses
 
