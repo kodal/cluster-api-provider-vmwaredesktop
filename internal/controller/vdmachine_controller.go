@@ -324,7 +324,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 			dhcp6 := vdMachine.Spec.Network.Ethernets[i].Dhcp6
 			for _, ipCidr := range nic.Ip {
 				ip, _, err := net.ParseCIDR(ipCidr)
-				if dhcp6 != nil && !*dhcp6 && ip.To4() != nil {
+				if dhcp6 != nil && !*dhcp6 && ip.To4() == nil {
 					continue
 				}
 				if err != nil {
