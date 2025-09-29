@@ -321,7 +321,10 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 				internalIP := clusterv1.MachineInternalIP
 				typeIP = &internalIP
 			}
-			dhcp6 := vdMachine.Spec.Network.Ethernets[i].Dhcp6
+			var dhcp6 *bool
+			if i < len(vdMachine.Spec.Network.Ethernets) {
+				dhcp6 = vdMachine.Spec.Network.Ethernets[i].Dhcp6
+			}
 			for _, ipCidr := range nic.Ip {
 				ip, _, err := net.ParseCIDR(ipCidr)
 				if dhcp6 != nil && !*dhcp6 && ip.To4() == nil {
