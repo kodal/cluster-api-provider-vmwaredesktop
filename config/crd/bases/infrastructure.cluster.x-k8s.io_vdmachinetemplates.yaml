@@ -192,6 +192,19 @@ spec:
                       vmID:
                         description: VM ID.
                         type: string
+                      vnc:
+                        properties:
+                          enabled:
+                            type: boolean
+                          generatePassword:
+                            type: boolean
+                          generatePort:
+                            type: boolean
+                          password:
+                            type: string
+                          port:
+                            type: string
+                        type: object
                     required:
                     - templateID
                     type: object

@@ -161,6 +161,19 @@ spec:
               vmID:
                 description: VM ID.
                 type: string
+              vnc:
+                properties:
+                  enabled:
+                    type: boolean
+                  generatePassword:
+                    type: boolean
+                  generatePort:
+                    type: boolean
+                  password:
+                    type: string
+                  port:
+                    type: string
+                type: object
             required:
             - templateID
             type: object
@@ -310,6 +323,19 @@ spec:
               state:
                 description: VM power state.
                 type: string
+              vnc:
+                properties:
+                  enabled:
+                    type: boolean
+                  generatePassword:
+                    type: boolean
+                  generatePort:
+                    type: boolean
+                  password:
+                    type: string
+                  port:
+                    type: string
+                type: object
             type: object
         type: object
     served: true

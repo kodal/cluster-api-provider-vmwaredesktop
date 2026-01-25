@@ -23,8 +23,10 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"math/rand"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -268,6 +270,10 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 		return res, err
 	}
 	if res, err := r.reconcileSharedFolders(ctx, client, vmId, vdMachine, logger); err != nil || !res.IsZero() {
+		return res, err
+	}
+
+	if res, err := r.reconcileVnc(ctx, client, vmId, vdMachine, logger); err != nil || !res.IsZero() {
 		return res, err
 	}
 
@@ -622,6 +628,176 @@ func (r *VDMachineReconciler) findIpamAddress(
 		return nil, err
 	}
 	return address, nil
+}
+
+func (r *VDMachineReconciler) reconcileVnc(
+	ctx context.Context,
+	client *vmrest.APIClient,
+	vmId *string,
+	vdMachine *infrav1.VDMachine,
+	logger logr.Logger,
+) (ctrl.Result, error) {
+	reconciled := true
+	vncSpec := vdMachine.Spec.Vnc
+	vncStatus := vdMachine.Status.Vnc
+
+	if vncStatus == nil {
+		err := r.updateVncStatus(ctx, client, vmId, vdMachine, logger)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: time.Millisecond}, nil
+	}
+
+	if vncSpec == nil {
+		return ctrl.Result{}, nil
+	}
+
+	if vncSpec.Enabled != nil && *vncStatus.Enabled != *vncSpec.Enabled {
+		reconciled = false
+	}
+
+	if vncSpec.Port != nil && *vncStatus.Port != *vncSpec.Port {
+		reconciled = false
+	}
+
+	if vncSpec.Port == nil && vncSpec.GeneratePort != nil && *vncSpec.GeneratePort {
+		reconciled = false
+	}
+
+	if vncSpec.Password != nil && *vncStatus.Password != *vncSpec.Password {
+		reconciled = false
+	}
+
+	if vncSpec.Password == nil && vncSpec.GeneratePassword != nil && *vncSpec.GeneratePassword {
+		reconciled = false
+	}
+
+	if reconciled {
+		return ctrl.Result{}, nil
+	}
+	enabled := vncSpec.Enabled
+
+	port := vncSpec.Port
+
+	if vncSpec.Port == nil && vncSpec.GeneratePort != nil && *vncSpec.GeneratePort {
+		randomPort := rand.Intn(100) + 5900
+		portStr := strconv.Itoa(randomPort)
+		port = &portStr
+		vncSpec.Port = port
+	}
+
+	password := vncSpec.Password
+
+	if vncSpec.Password == nil && vncSpec.GeneratePassword != nil && *vncSpec.GeneratePassword {
+		randomPassword := generatePassword()
+		password = &randomPassword
+		vncSpec.Password = password
+	}
+
+	params := make(map[string]string)
+
+	if enabled != nil {
+		enabledString := strings.ToUpper(strconv.FormatBool(*enabled))
+		params["enabled"] = enabledString
+	}
+
+	if port != nil {
+		params["port"] = *port
+	}
+
+	if password != nil {
+		params["password"] = *password
+	}
+
+	for name, value := range params {
+		vncKey := fmt.Sprintf("RemoteDisplay.vnc.%s", name)
+		configParams := vmrest.ConfigVMParamsParameter{
+			Name:  &vncKey,
+			Value: &value,
+		}
+		_, _, err := client.VMManagementAPI.ConfigVMParams(ctx, *vmId).ConfigVMParamsParameter(configParams).Execute()
+		if err != nil {
+			r.logErrorResponse(err, logger)
+			return ctrl.Result{}, fmt.Errorf("failed to set param: %v", err)
+		}
+	}
+
+	err := r.updateVncStatus(ctx, client, vmId, vdMachine, logger)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r VDMachineReconciler) updateVncStatus(
+	ctx context.Context,
+	client *vmrest.APIClient,
+	vmId *string,
+	vdMachine *infrav1.VDMachine,
+	logger logr.Logger,
+) error {
+	keys := [3]string{"enabled", "port", "password"}
+	keyPrefixes := [2]string{"RemoteDisplay", "remotedisplay"}
+
+	params := make(map[string]string)
+
+	for _, key := range keys {
+		for _, prefix := range keyPrefixes {
+			vncKey := fmt.Sprintf("%s.vnc.%s", prefix, key)
+			result, _, err := client.VMManagementAPI.GetVMParams(ctx, *vmId, vncKey).Execute()
+			if err != nil {
+				r.logErrorResponse(err, logger)
+				return fmt.Errorf("failed to get param: %v, error: %v", vncKey, err)
+			}
+			value := *result.Value
+			params[key] = value
+			if value != "" {
+				break
+			}
+		}
+	}
+	enabledString := paramToPointer(params["enabled"])
+	port := paramToPointer(params["port"])
+	password := paramToPointer(params["password"])
+	var enabled *bool
+	enabled = nil
+	if enabledString != nil {
+		var err error
+		enabledBool, err := strconv.ParseBool(*enabledString)
+		if err != nil {
+			logger.Error(err, err.Error())
+		} else {
+			enabled = &enabledBool
+		}
+	}
+
+	vdMachine.Status.Vnc = &infrav1.VNC{
+		Enabled:  enabled,
+		Port:     port,
+		Password: password,
+	}
+	return nil
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const length = 8 // VNC limit
+
+func generatePassword() string {
+	password := make([]byte, length)
+	for i := range password {
+		n := rand.Intn(len(charset))
+		password[i] = charset[n]
+	}
+	return string(password)
+}
+
+func paramToPointer(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func (r *VDMachineReconciler) reconcileSharedFolders(
