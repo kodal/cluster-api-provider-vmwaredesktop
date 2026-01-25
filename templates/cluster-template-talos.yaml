@@ -61,6 +61,10 @@ spec:
               apiGroup: ipam.cluster.x-k8s.io
               kind: InClusterIPPool
               name: ${CLUSTER_NAME}
+      vnc:
+        enabled: true
+        generatePort: true
+        generatePassword: true
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
 kind: TalosControlPlane

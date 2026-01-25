@@ -23,8 +23,10 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"math/rand"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -195,164 +197,216 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 	}
 
 	client, ctx := NewVDClient(ctx)
-
 	vmId := vdMachine.Spec.VmID
-
 	logger = logger.WithValues("vmID", vmId)
 
+	// Create VM if not exists
 	if vmId == nil {
-		clone := vmrest.VMCloneParameter{
-			Name:     vdMachine.Name,
-			ParentId: vdMachine.Spec.TemplateID,
-		}
-
-		logger.Info("Creating VM", "templateId", vdMachine.Spec.TemplateID)
-		vm, _, err := client.VMManagementAPI.CreateVM(ctx).VMCloneParameter(clone).Execute()
-		if err != nil {
-			r.logErrorResponse(err, logger)
-			return ctrl.Result{}, fmt.Errorf("failed to create VM: %v", err)
-		}
-		providerID := fmt.Sprintf("vmwaredesktop://%s", vm.Id)
-		vdMachine.Spec.ProviderID = &providerID
-		vdMachine.Spec.VmID = &vm.Id
-
-		hardware := infrav1.VDHardware{
-			Cpu:    *vm.Cpu.Processors,
-			Memory: *vm.Memory,
-		}
-		vdMachine.Status.Hardware = hardware
-		logger.Info("VM created", "id", vm.Id)
-		return ctrl.Result{}, nil
+		return r.reconcileCreateVM(ctx, client, vdMachine, logger)
 	}
 
-	cpuConfigured := vdMachine.Spec.Cpu == nil || *vdMachine.Spec.Cpu == vdMachine.Status.Hardware.Cpu
-	memoryConfigured := vdMachine.Spec.Memory == nil || *vdMachine.Spec.Memory == vdMachine.Status.Hardware.Memory
-
-	if !cpuConfigured || !memoryConfigured {
-
-		cpu := vdMachine.Status.Hardware.Cpu
-		memory := vdMachine.Status.Hardware.Memory
-		if vdMachine.Spec.Cpu != nil {
-			cpu = *vdMachine.Spec.Cpu
-		}
-		if vdMachine.Spec.Memory != nil {
-			memory = *vdMachine.Spec.Memory
-		}
-
-		logger.Info("Updating VM hardware", "cpu", cpu, "memory", memory)
-
-		vdParameter := vmrest.VMParameter{
-			Processors: &cpu,
-			Memory:     &memory,
-		}
-
-		result, _, err := client.VMManagementAPI.UpdateVM(ctx, *vmId).VMParameter(vdParameter).Execute()
-		if err != nil {
-			r.logErrorResponse(err, logger)
-			return ctrl.Result{}, fmt.Errorf("failed to update VM hardware: %v", err)
-		}
-		logger.Info("VM hardware updated", "result", result)
-		hardware := infrav1.VDHardware{
-			Cpu:    *result.Cpu.Processors,
-			Memory: *result.Memory,
-		}
-		vdMachine.Status.Hardware = hardware
-		return ctrl.Result{}, nil
+	// Update hardware if needed
+	if err := r.reconcileHardware(ctx, client, vmId, vdMachine, logger); err != nil {
+		return ctrl.Result{}, err
 	}
 
+	// Reconcile network adapters
 	if res, err := r.reconcileNetworkAdapters(ctx, client, vmId, vdMachine, logger); err != nil || !res.IsZero() {
 		return res, err
 	}
 
+	// Reconcile network addresses
 	if res, err := r.reconcileNetworkAddresses(ctx, vdMachine, logger); err != nil || !res.IsZero() {
 		return res, err
 	}
+
+	// Reconcile shared folders
 	if res, err := r.reconcileSharedFolders(ctx, client, vmId, vdMachine, logger); err != nil || !res.IsZero() {
 		return res, err
 	}
 
+	// Reconcile VNC settings
+	if res, err := r.reconcileVnc(ctx, client, vmId, vdMachine, logger); err != nil || !res.IsZero() {
+		return res, err
+	}
+
+	// Configure bootstrap data
 	if err := r.reconcileBootstrapData(ctx, client, vmId, machine, vdMachine, logger); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if *vdMachine.Status.State == "poweredOff" {
-		message := "Powering on"
-
-		logger.Info(message)
-
-		powerState, response, err := client.VMPowerManagementAPI.ChangePowerState(ctx, *vmId).Body(string(vmrest.VMPOWEROPERATION_ON)).Execute()
-		if err != nil {
-			if response.StatusCode == 404 {
-				logger.Info("VM not found")
-				vdMachine.Spec.ProviderID = nil
-				return ctrl.Result{}, nil
-			}
-			r.logErrorResponse(err, logger)
-			return ctrl.Result{}, fmt.Errorf("failed to power on VM: %v", err)
-		}
-
-		vdMachine.Status.State = &powerState.PowerState
-		return ctrl.Result{}, nil
+	// Power on VM if needed
+	if err := r.reconcilePowerState(ctx, client, vmId, vdMachine, logger); err != nil {
+		return ctrl.Result{}, err
 	}
 
-	if len(vdMachine.Status.Addresses) == 0 {
-		logger.Info("Getting IP address")
-
-		nics, response, err := client.VMNetworkAdaptersManagementAPI.GetNicInfo(ctx, *vmId).Execute()
-		if err != nil {
-			if response.StatusCode == 500 {
-				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-			}
-			return ctrl.Result{}, err
-		}
-
-		if len(nics.Nics) == 0 {
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-		}
-
-		addresses := []clusterv1.MachineAddress{}
-
-		for i, nic := range nics.Nics {
-			var typeIP *clusterv1.MachineAddressType
-			if i < len(vdMachine.Spec.Network.Ethernets) {
-				typeIP = vdMachine.Spec.Network.Ethernets[i].TypeIP
-			}
-			if typeIP == nil {
-				internalIP := clusterv1.MachineInternalIP
-				typeIP = &internalIP
-			}
-			var dhcp6 *bool
-			if i < len(vdMachine.Spec.Network.Ethernets) {
-				dhcp6 = vdMachine.Spec.Network.Ethernets[i].Dhcp6
-			}
-			for _, ipCidr := range nic.Ip {
-				ip, _, err := net.ParseCIDR(ipCidr)
-				if dhcp6 != nil && !*dhcp6 && ip.To4() == nil {
-					continue
-				}
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-				addresses = append(addresses, clusterv1.MachineAddress{
-					Type:    *typeIP,
-					Address: ip.String(),
-				})
-			}
-		}
-		if len(addresses) < len(vdMachine.Spec.Network.Ethernets) {
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-		}
-		logger.Info("VM got IP addresses", "IPs", addresses)
-		vdMachine.Status.Addresses = addresses
-
-		// Set Ready to true.
-		vdMachine.Status.Ready = true
-		vdMachine.Status.Initialization.Provisioned = true
-		logger.Info("VDMachine is ready")
-		return ctrl.Result{}, nil
+	// Get IP addresses if not available
+	if res, err := r.reconcileAddresses(ctx, client, vmId, vdMachine, logger); err != nil || !res.IsZero() {
+		return res, err
 	}
 
 	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+}
+
+func (r *VDMachineReconciler) reconcileCreateVM(ctx context.Context, client *vmrest.APIClient, vdMachine *infrav1.VDMachine, logger logr.Logger) (ctrl.Result, error) {
+	clone := vmrest.VMCloneParameter{
+		Name:     vdMachine.Name,
+		ParentId: vdMachine.Spec.TemplateID,
+	}
+
+	logger.Info("Creating VM", "templateId", vdMachine.Spec.TemplateID)
+	vm, _, err := client.VMManagementAPI.CreateVM(ctx).VMCloneParameter(clone).Execute()
+	if err != nil {
+		r.logErrorResponse(err, logger)
+		return ctrl.Result{}, fmt.Errorf("failed to create VM: %v", err)
+	}
+
+	providerID := fmt.Sprintf("vmwaredesktop://%s", vm.Id)
+	vdMachine.Spec.ProviderID = &providerID
+	vdMachine.Spec.VmID = &vm.Id
+
+	hardware := infrav1.VDHardware{
+		Cpu:    *vm.Cpu.Processors,
+		Memory: *vm.Memory,
+	}
+	vdMachine.Status.Hardware = hardware
+	logger.Info("VM created", "id", vm.Id)
+	return ctrl.Result{}, nil
+}
+
+func (r *VDMachineReconciler) reconcileHardware(ctx context.Context, client *vmrest.APIClient, vmId *string, vdMachine *infrav1.VDMachine, logger logr.Logger) error {
+	cpuConfigured := vdMachine.Spec.Cpu == nil || *vdMachine.Spec.Cpu == vdMachine.Status.Hardware.Cpu
+	memoryConfigured := vdMachine.Spec.Memory == nil || *vdMachine.Spec.Memory == vdMachine.Status.Hardware.Memory
+
+	if cpuConfigured && memoryConfigured {
+		return nil
+	}
+
+	cpu := vdMachine.Status.Hardware.Cpu
+	memory := vdMachine.Status.Hardware.Memory
+	if vdMachine.Spec.Cpu != nil {
+		cpu = *vdMachine.Spec.Cpu
+	}
+	if vdMachine.Spec.Memory != nil {
+		memory = *vdMachine.Spec.Memory
+	}
+
+	logger.Info("Updating VM hardware", "cpu", cpu, "memory", memory)
+
+	vdParameter := vmrest.VMParameter{
+		Processors: &cpu,
+		Memory:     &memory,
+	}
+
+	result, _, err := client.VMManagementAPI.UpdateVM(ctx, *vmId).VMParameter(vdParameter).Execute()
+	if err != nil {
+		r.logErrorResponse(err, logger)
+		return fmt.Errorf("failed to update VM hardware: %v", err)
+	}
+
+	logger.Info("VM hardware updated", "result", result)
+	hardware := infrav1.VDHardware{
+		Cpu:    *result.Cpu.Processors,
+		Memory: *result.Memory,
+	}
+	vdMachine.Status.Hardware = hardware
+	return nil
+}
+
+func (r *VDMachineReconciler) reconcilePowerState(ctx context.Context, client *vmrest.APIClient, vmId *string, vdMachine *infrav1.VDMachine, logger logr.Logger) error {
+	if *vdMachine.Status.State != "poweredOff" {
+		return nil
+	}
+
+	logger.Info("Powering on")
+
+	powerState, response, err := client.VMPowerManagementAPI.ChangePowerState(ctx, *vmId).Body(string(vmrest.VMPOWEROPERATION_ON)).Execute()
+	if err != nil {
+		if response.StatusCode == 404 {
+			logger.Info("VM not found")
+			vdMachine.Spec.ProviderID = nil
+			return nil
+		}
+		r.logErrorResponse(err, logger)
+		return fmt.Errorf("failed to power on VM: %v", err)
+	}
+
+	vdMachine.Status.State = &powerState.PowerState
+	return nil
+}
+
+func (r *VDMachineReconciler) reconcileAddresses(ctx context.Context, client *vmrest.APIClient, vmId *string, vdMachine *infrav1.VDMachine, logger logr.Logger) (ctrl.Result, error) {
+	if len(vdMachine.Status.Addresses) > 0 {
+		return ctrl.Result{}, nil
+	}
+
+	logger.Info("Getting IP address")
+
+	nics, response, err := client.VMNetworkAdaptersManagementAPI.GetNicInfo(ctx, *vmId).Execute()
+	if err != nil {
+		if response.StatusCode == 500 {
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	if len(nics.Nics) == 0 {
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	addresses, err := r.extractAddresses(vdMachine, nics)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if len(addresses) < len(vdMachine.Spec.Network.Ethernets) {
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	logger.Info("VM got IP addresses", "IPs", addresses)
+	vdMachine.Status.Addresses = addresses
+
+	// Set Ready to true.
+	vdMachine.Status.Ready = true
+	vdMachine.Status.Initialization.Provisioned = true
+	logger.Info("VDMachine is ready")
+	return ctrl.Result{}, nil
+}
+
+func (r *VDMachineReconciler) extractAddresses(vdMachine *infrav1.VDMachine, nics *vmrest.NicIpStackAll) ([]clusterv1.MachineAddress, error) {
+	addresses := []clusterv1.MachineAddress{}
+
+	for i, nic := range nics.Nics {
+		var typeIP *clusterv1.MachineAddressType
+		if i < len(vdMachine.Spec.Network.Ethernets) {
+			typeIP = vdMachine.Spec.Network.Ethernets[i].TypeIP
+		}
+		if typeIP == nil {
+			internalIP := clusterv1.MachineInternalIP
+			typeIP = &internalIP
+		}
+
+		var dhcp6 *bool
+		if i < len(vdMachine.Spec.Network.Ethernets) {
+			dhcp6 = vdMachine.Spec.Network.Ethernets[i].Dhcp6
+		}
+
+		for _, ipCidr := range nic.Ip {
+			ip, _, err := net.ParseCIDR(ipCidr)
+			if dhcp6 != nil && !*dhcp6 && ip.To4() == nil {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			addresses = append(addresses, clusterv1.MachineAddress{
+				Type:    *typeIP,
+				Address: ip.String(),
+			})
+		}
+	}
+
+	return addresses, nil
 }
 
 func (r *VDMachineReconciler) reconcileBootstrapData(
@@ -622,6 +676,176 @@ func (r *VDMachineReconciler) findIpamAddress(
 		return nil, err
 	}
 	return address, nil
+}
+
+func (r *VDMachineReconciler) reconcileVnc(
+	ctx context.Context,
+	client *vmrest.APIClient,
+	vmId *string,
+	vdMachine *infrav1.VDMachine,
+	logger logr.Logger,
+) (ctrl.Result, error) {
+	reconciled := true
+	vncSpec := vdMachine.Spec.Vnc
+	vncStatus := vdMachine.Status.Vnc
+
+	if vncStatus == nil {
+		err := r.updateVncStatus(ctx, client, vmId, vdMachine, logger)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: time.Millisecond}, nil
+	}
+
+	if vncSpec == nil {
+		return ctrl.Result{}, nil
+	}
+
+	if vncSpec.Enabled != nil && *vncStatus.Enabled != *vncSpec.Enabled {
+		reconciled = false
+	}
+
+	if vncSpec.Port != nil && *vncStatus.Port != *vncSpec.Port {
+		reconciled = false
+	}
+
+	if vncSpec.Port == nil && vncSpec.GeneratePort != nil && *vncSpec.GeneratePort {
+		reconciled = false
+	}
+
+	if vncSpec.Password != nil && *vncStatus.Password != *vncSpec.Password {
+		reconciled = false
+	}
+
+	if vncSpec.Password == nil && vncSpec.GeneratePassword != nil && *vncSpec.GeneratePassword {
+		reconciled = false
+	}
+
+	if reconciled {
+		return ctrl.Result{}, nil
+	}
+	enabled := vncSpec.Enabled
+
+	port := vncSpec.Port
+
+	if vncSpec.Port == nil && vncSpec.GeneratePort != nil && *vncSpec.GeneratePort {
+		randomPort := rand.Intn(100) + 5900
+		portStr := strconv.Itoa(randomPort)
+		port = &portStr
+		vncSpec.Port = port
+	}
+
+	password := vncSpec.Password
+
+	if vncSpec.Password == nil && vncSpec.GeneratePassword != nil && *vncSpec.GeneratePassword {
+		randomPassword := generatePassword()
+		password = &randomPassword
+		vncSpec.Password = password
+	}
+
+	params := make(map[string]string)
+
+	if enabled != nil {
+		enabledString := strings.ToUpper(strconv.FormatBool(*enabled))
+		params["enabled"] = enabledString
+	}
+
+	if port != nil {
+		params["port"] = *port
+	}
+
+	if password != nil {
+		params["password"] = *password
+	}
+
+	for name, value := range params {
+		vncKey := fmt.Sprintf("RemoteDisplay.vnc.%s", name)
+		configParams := vmrest.ConfigVMParamsParameter{
+			Name:  &vncKey,
+			Value: &value,
+		}
+		_, _, err := client.VMManagementAPI.ConfigVMParams(ctx, *vmId).ConfigVMParamsParameter(configParams).Execute()
+		if err != nil {
+			r.logErrorResponse(err, logger)
+			return ctrl.Result{}, fmt.Errorf("failed to set param: %v", err)
+		}
+	}
+
+	err := r.updateVncStatus(ctx, client, vmId, vdMachine, logger)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r VDMachineReconciler) updateVncStatus(
+	ctx context.Context,
+	client *vmrest.APIClient,
+	vmId *string,
+	vdMachine *infrav1.VDMachine,
+	logger logr.Logger,
+) error {
+	keys := [3]string{"enabled", "port", "password"}
+	keyPrefixes := [2]string{"RemoteDisplay", "remotedisplay"}
+
+	params := make(map[string]string)
+
+	for _, key := range keys {
+		for _, prefix := range keyPrefixes {
+			vncKey := fmt.Sprintf("%s.vnc.%s", prefix, key)
+			result, _, err := client.VMManagementAPI.GetVMParams(ctx, *vmId, vncKey).Execute()
+			if err != nil {
+				r.logErrorResponse(err, logger)
+				return fmt.Errorf("failed to get param: %v, error: %v", vncKey, err)
+			}
+			value := *result.Value
+			params[key] = value
+			if value != "" {
+				break
+			}
+		}
+	}
+	enabledString := paramToPointer(params["enabled"])
+	port := paramToPointer(params["port"])
+	password := paramToPointer(params["password"])
+	var enabled *bool
+	enabled = nil
+	if enabledString != nil {
+		var err error
+		enabledBool, err := strconv.ParseBool(*enabledString)
+		if err != nil {
+			logger.Error(err, err.Error())
+		} else {
+			enabled = &enabledBool
+		}
+	}
+
+	vdMachine.Status.Vnc = &infrav1.VNC{
+		Enabled:  enabled,
+		Port:     port,
+		Password: password,
+	}
+	return nil
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const length = 8 // VNC limit
+
+func generatePassword() string {
+	password := make([]byte, length)
+	for i := range password {
+		n := rand.Intn(len(charset))
+		password[i] = charset[n]
+	}
+	return string(password)
+}
+
+func paramToPointer(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func (r *VDMachineReconciler) reconcileSharedFolders(

@@ -67,6 +67,9 @@ type VDMachineSpec struct {
 	// Shared folders required to enable at VMWare Fusion or VMWare Desktop
 	// +optional
 	SharedFolders []VDSharedFolder `json:"sharedFolders,omitempty"`
+
+	// +optional
+	Vnc *VNC `json:"vnc,omitempty"`
 }
 
 // InitializationStatus represents the initialization state of the resource.
@@ -113,6 +116,9 @@ type VDMachineStatus struct {
 	// Shared folders
 	// +optional
 	SharedFolders []VDSharedFolder `json:"sharedFolders,omitempty"`
+
+	// +optional
+	Vnc *VNC `json:"vnc,omitempty"`
 }
 
 type VDHardware struct {
@@ -162,6 +168,14 @@ type VDNetworkEthernet struct {
 type VDNetworkRoute struct {
 	To  string  `json:"to"`
 	Via *string `json:"via,omitempty"`
+}
+
+type VNC struct {
+	Enabled          *bool   `json:"enabled,omitempty"`
+	Port             *string `json:"port,omitempty"`
+	Password         *string `json:"password,omitempty"`
+	GeneratePort     *bool   `json:"generatePort,omitempty"`
+	GeneratePassword *bool   `json:"generatePassword,omitempty"`
 }
 
 // +kubebuilder:object:root=true
