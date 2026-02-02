@@ -34,7 +34,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -42,7 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1 "k8s.io/api/core/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -185,7 +185,7 @@ func (r *VDMachineReconciler) reconcileNormal(ctx context.Context, cluster *clus
 	controllerutil.AddFinalizer(vdMachine, infrav1.MachineFinalizer)
 
 	// Check if the infrastructure is ready, otherwise return and wait for the cluster object to be updated
-	if !cluster.Status.InfrastructureReady {
+	if cluster.Status.Initialization.InfrastructureProvisioned == nil || !*cluster.Status.Initialization.InfrastructureProvisioned {
 		logger.Info("Waiting for VDCluster Controller to create cluster infrastructure")
 		return ctrl.Result{}, nil
 	}
@@ -445,7 +445,7 @@ func (r *VDMachineReconciler) reconcileBootstrapData(
 		var addresses []string
 		var routes []Route
 		if ipamAddress != nil && ipamAddress.Spec.Address != "" {
-			addresses = append(addresses, fmt.Sprintf("%s/%d", ipamAddress.Spec.Address, ipamAddress.Spec.Prefix))
+			addresses = append(addresses, fmt.Sprintf("%s/%d", ipamAddress.Spec.Address, *ipamAddress.Spec.Prefix))
 			if vdNetworkEthernet.IpamAsNodeIP != nil && *vdNetworkEthernet.IpamAsNodeIP {
 				nodeIP = &ipamAddress.Spec.Address
 			}
@@ -627,7 +627,11 @@ func (r *VDMachineReconciler) reconcileNetworkAddresses(
 						},
 					},
 					Spec: ipamv1.IPAddressClaimSpec{
-						PoolRef: *ethernet.IpamRef,
+						PoolRef: ipamv1.IPPoolReference{
+							APIGroup: *ethernet.IpamRef.APIGroup,
+							Kind:     ethernet.IpamRef.Kind,
+							Name:     ethernet.IpamRef.Name,
+						},
 					},
 				}
 				logger.Info("creating ip claim", "claim", claim)

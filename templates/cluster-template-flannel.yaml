@@ -1,5 +1,5 @@
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
   name: ${CLUSTER_NAME}
@@ -12,14 +12,12 @@ spec:
       cidrBlocks: ["10.244.0.0/16"]
   controlPlaneRef:
     kind: KubeadmControlPlane
-    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    apiGroup: controlplane.cluster.x-k8s.io
     name: "${CLUSTER_NAME}-control-plane"
-    namespace: ${NAMESPACE}
   infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+    apiGroup: infrastructure.cluster.x-k8s.io
     kind: VDCluster
     name: "${CLUSTER_NAME}"
-    namespace: ${NAMESPACE}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: VDCluster
@@ -31,7 +29,7 @@ spec:
     host: ${CONTROL_PLANE_ENDPOINT_IP}
     port: 6443
 ---
-apiVersion: ipam.cluster.x-k8s.io/v1alpha1
+apiVersion: ipam.cluster.x-k8s.io/v1alpha2
 kind: InClusterIPPool
 metadata:
   name: ${CLUSTER_NAME}
@@ -74,7 +72,7 @@ spec:
               name: ${CLUSTER_NAME}
 ---
 kind: KubeadmControlPlane
-apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
 metadata:
   name: "${CLUSTER_NAME}-control-plane"
   namespace: ${NAMESPACE}
@@ -82,11 +80,11 @@ spec:
   version: "${KUBERNETES_VERSION}"
   replicas: ${CONTROL_PLANE_MACHINE_COUNT=1}
   machineTemplate:
-    infrastructureRef:
-      kind: VDMachineTemplate
-      apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-      name: "${CLUSTER_NAME}-control-plane"
-      namespace: ${NAMESPACE}
+    spec:
+      infrastructureRef:
+        kind: VDMachineTemplate
+        apiGroup: infrastructure.cluster.x-k8s.io
+        name: "${CLUSTER_NAME}-control-plane"
   kubeadmConfigSpec:
     initConfiguration:
       localAPIEndpoint:
@@ -94,8 +92,10 @@ spec:
       nodeRegistration:
         name: "{{ ds.meta_data.local_hostname }}"
         kubeletExtraArgs:
-          provider-id: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
-          node-ip: "{{ ds.meta_data.node_ip }}"
+          - name: provider-id
+            value: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
+          - name: node-ip
+            value: "{{ ds.meta_data.node_ip }}"
     joinConfiguration:
       controlPlane:
         localAPIEndpoint:
@@ -103,8 +103,10 @@ spec:
       nodeRegistration:
         name: "{{ ds.meta_data.local_hostname }}"
         kubeletExtraArgs:
-          provider-id: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
-          node-ip: "{{ ds.meta_data.node_ip }}"
+          - name: provider-id
+            value: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
+          - name: node-ip
+            value: "{{ ds.meta_data.node_ip }}"
     users:
       - name: root
         sshAuthorizedKeys:
@@ -309,7 +311,7 @@ spec:
       - /etc/kube-vip-prepare.sh
       - systemctl enable --now mnt-hgfs.mount
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineDeployment
 metadata:
   name: ${CLUSTER_NAME}-workers
@@ -326,14 +328,12 @@ spec:
       bootstrap:
         configRef:
           name: ${CLUSTER_NAME}-worker
-          namespace: ${NAMESPACE}
-          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          apiGroup: bootstrap.cluster.x-k8s.io
           kind: KubeadmConfigTemplate
       infrastructureRef:
         name: "${CLUSTER_NAME}-worker"
-        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+        apiGroup: infrastructure.cluster.x-k8s.io
         kind: VDMachineTemplate
-        namespace: ${NAMESPACE}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: VDMachineTemplate
@@ -345,7 +345,7 @@ spec:
     spec:
       templateID: ${TEMPLATE_VM_ID}
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
 kind: KubeadmConfigTemplate
 metadata:
   name: ${CLUSTER_NAME}-worker
@@ -360,9 +360,12 @@ spec:
       joinConfiguration:
         nodeRegistration:
           kubeletExtraArgs:
-            provider-id: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
+          - name: provider-id
+            value: "vmwaredesktop://'{{ ds.meta_data.instance_id }}'"
+          - name: node-ip
+            value: "{{ ds.meta_data.node_ip }}"
 ---
-apiVersion: addons.cluster.x-k8s.io/v1beta1
+apiVersion: addons.cluster.x-k8s.io/v1beta2
 kind: ClusterResourceSet
 metadata:
   labels:

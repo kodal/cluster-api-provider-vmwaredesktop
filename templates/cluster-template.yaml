@@ -1,5 +1,5 @@
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
   name: ${CLUSTER_NAME}
@@ -12,7 +12,7 @@ spec:
   paused: false
   controlPlaneRef:
     kind: KubeadmControlPlane
-    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta2
     name: "${CLUSTER_NAME}-control-plane"
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
@@ -38,7 +38,7 @@ spec:
       templateID: ${TEMPLATE_VM_ID}
 ---
 kind: KubeadmControlPlane
-apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
 metadata:
   name: "${CLUSTER_NAME}-control-plane"
 spec:
@@ -191,7 +191,7 @@ spec:
       - /etc/kube-vip-prepare.sh
       - systemctl enable --now mnt-hgfs.mount
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineDeployment
 metadata:
   name: "${CLUSTER_NAME}-workers"
@@ -207,7 +207,7 @@ spec:
       bootstrap:
         configRef:
           name: "${CLUSTER_NAME}-worker"
-          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
           kind: KubeadmConfigTemplate
       infrastructureRef:
         name: "${CLUSTER_NAME}-worker"
@@ -223,7 +223,7 @@ spec:
     spec:
       templateID: ${TEMPLATE_VM_ID}
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
 kind: KubeadmConfigTemplate
 metadata:
   name: "${CLUSTER_NAME}-worker"

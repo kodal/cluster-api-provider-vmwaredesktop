@@ -14,8 +14,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/cluster-api/api/v1beta1"
-	expv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -32,7 +31,7 @@ type MachineLogCollector struct {
 func (m MachineLogCollector) CollectInfrastructureLogs(
 	ctx context.Context,
 	managementClusterClient client.Client,
-	c *v1beta1.Cluster,
+	c *clusterv1.Cluster,
 	outputPath string,
 ) error {
 	return nil
@@ -42,7 +41,7 @@ func (m MachineLogCollector) CollectInfrastructureLogs(
 func (MachineLogCollector) CollectMachinePoolLog(
 	ctx context.Context,
 	managementClusterClient client.Client,
-	m *expv1.MachinePool,
+	m *clusterv1.MachinePool,
 	outputPath string,
 ) error {
 	return nil
@@ -52,7 +51,7 @@ func (MachineLogCollector) CollectMachinePoolLog(
 func (MachineLogCollector) CollectMachineLog(
 	ctx context.Context,
 	managementClusterClient client.Client,
-	m *v1beta1.Machine,
+	m *clusterv1.Machine,
 	outputPath string,
 ) error {
 	if len(m.Status.Addresses) == 0 {

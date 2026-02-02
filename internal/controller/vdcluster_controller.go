@@ -35,7 +35,7 @@ import (
 
 	infrav1 "github.com/kodal/cluster-api-provider-vmwaredesktop/api/v1alpha1"
 
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 // VDClusterReconciler reconciles a VDCluster object

@@ -1,5 +1,5 @@
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
   name: ${CLUSTER_NAME}
@@ -9,10 +9,10 @@ spec:
       cidrBlocks: ["10.244.0.0/16"]
   controlPlaneRef:
     kind: TalosControlPlane
-    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    apiGroup: controlplane.cluster.x-k8s.io
     name: ${CLUSTER_NAME}-control-plane
   infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+    apiGroup: infrastructure.cluster.x-k8s.io
     kind: VDCluster
     name: ${CLUSTER_NAME}
 ---
@@ -25,7 +25,7 @@ spec:
     host: ${CONTROL_PLANE_ENDPOINT_IP}
     port: 6443
 ---
-apiVersion: ipam.cluster.x-k8s.io/v1alpha1
+apiVersion: ipam.cluster.x-k8s.io/v1alpha2
 kind: InClusterIPPool
 metadata:
   name: ${CLUSTER_NAME}
@@ -116,7 +116,7 @@ spec:
               advertisedSubnets:
                 - ${NODE_SUBNET}
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineDeployment
 metadata:
   name: ${CLUSTER_NAME}-worker
@@ -131,14 +131,12 @@ spec:
       bootstrap:
         configRef:
           kind: TalosConfigTemplate
-          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+          apiGroup: bootstrap.cluster.x-k8s.io
           name: ${CLUSTER_NAME}-worker
-          namespace: ${NAMESPACE}
       infrastructureRef:
         kind: VDMachineTemplate
-        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+        apiGroup: infrastructure.cluster.x-k8s.io
         name: ${CLUSTER_NAME}-worker
-        namespace: ${NAMESPACE}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: VDMachineTemplate
