@@ -1,6 +1,6 @@
 name: Lint
 
-on: [ pull_request ]
+on: [pull_request]
 
 jobs:
   lint:
@@ -16,6 +16,6 @@ jobs:
           go-version-file: go.mod
 
       - name: Run linter
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.1
+          version: v2.8
